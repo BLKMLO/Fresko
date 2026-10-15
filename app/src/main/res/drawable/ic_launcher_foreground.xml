@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Livre ouvert stylisé + point de notification -->
+    <path
+        android:fillColor="#FFF5F0FF"
+        android:pathData="M30,38c8,-3 16,-3 24,2v32c-8,-5 -16,-5 -24,-2z" />
+    <path
+        android:fillColor="#FFD9CCFF"
+        android:pathData="M78,38c-8,-3 -16,-3 -24,2v32c8,-5 16,-5 24,-2z" />
+    <path
+        android:fillColor="#FFFF6740"
+        android:pathData="M76,34m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+</vector>

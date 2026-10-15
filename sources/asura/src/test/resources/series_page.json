@@ -1,0 +1,314 @@
+{
+ "data": [
+  {
+   "id": 6064,
+   "slug": "sword-of-the-undying",
+   "title": "Sword of the Undying",
+   "alt_titles": [
+    "검술명가의 네크로맨서"
+   ],
+   "description": "",
+   "cover": "https://cdn.asurascans.com/asura-images/covers/sword-of-the-undying.ff1731.webp",
+   "status": "ongoing",
+   "type": "manhwa",
+   "author": "Gamtwieii",
+   "artist": "Lee Gwang-su",
+   "release_year": 2026,
+   "popularity_rank": 109,
+   "bookmark_count": 23254,
+   "rating": 8.5,
+   "chapter_count": 32,
+   "last_chapter_at": "2026-10-15T19:43:36.043372Z",
+   "created_at": "2026-05-07T13:32:34.770369Z",
+   "updated_at": "2026-10-15T19:59:26.049896Z",
+   "public_url": "/comics/sword-of-the-undying-1bb35e56",
+   "source_url": "/s/6064",
+   "genres": [
+    {
+     "id": 1,
+     "name": "Action",
+     "slug": "action"
+    },
+    {
+     "id": 4,
+     "name": "Adventure",
+     "slug": "adventure"
+    },
+    {
+     "id": 16,
+     "name": "Fantasy",
+     "slug": "fantasy"
+    },
+    {
+     "id": 20,
+     "name": "Genius MC",
+     "slug": "genius-mc"
+    },
+    {
+     "id": 35,
+     "name": "Mystery",
+     "slug": "mystery"
+    },
+    {
+     "id": 36,
+     "name": "Necromancer",
+     "slug": "necromancer"
+    }
+   ],
+   "latest_chapters": [
+    {
+     "id": 262244,
+     "series_id": 0,
+     "number": 31,
+     "title": "Father (1)",
+     "slug": "chapter-31",
+     "page_count": 0,
+     "is_premium": true,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-16T01:43:36.043372Z",
+     "published_at": "2026-10-15T19:43:36.043372Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    },
+    {
+     "id": 262108,
+     "series_id": 0,
+     "number": 30,
+     "title": "Inquisitor (2)",
+     "slug": "chapter-30",
+     "page_count": 0,
+     "is_premium": false,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-11T02:51:19.985444Z",
+     "published_at": "2026-10-10T20:51:19.985444Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    },
+    {
+     "id": 261974,
+     "series_id": 0,
+     "number": 29,
+     "title": "‎Inquisitor (1)",
+     "slug": "chapter-29",
+     "page_count": 0,
+     "is_premium": false,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-05T04:28:59.770184Z",
+     "published_at": "2026-10-04T22:28:59.770184Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    }
+   ]
+  },
+  {
+   "id": 1896,
+   "slug": "solo-max-level-newbie",
+   "title": "Solo Max-Level Newbie",
+   "alt_titles": [
+    "Нуб максимального уровня"
+   ],
+   "description": "",
+   "cover": "https://cdn.asurascans.com/asura-images/covers/solo-max-level-newbie.bac83f.webp",
+   "banner": "https://cdn.asurascans.com/asura-images/banners/solo-max-level-newbie.88c2f5.webp",
+   "status": "ongoing",
+   "type": "manhwa",
+   "author": "Maslow",
+   "artist": "Swingbat",
+   "popularity_rank": 19,
+   "bookmark_count": 128799,
+   "rating": 9.446966877558616,
+   "chapter_count": 282,
+   "last_chapter_at": "2026-10-15T19:32:07.887793Z",
+   "created_at": "0001-01-01T00:00:00Z",
+   "updated_at": "2026-10-15T19:59:26.049896Z",
+   "public_url": "/comics/solo-max-level-newbie-1bb35e56",
+   "source_url": "/s/1896",
+   "genres": [
+    {
+     "id": 1,
+     "name": "Action",
+     "slug": "action"
+    },
+    {
+     "id": 4,
+     "name": "Adventure",
+     "slug": "adventure"
+    },
+    {
+     "id": 7,
+     "name": "Comedy",
+     "slug": "comedy"
+    },
+    {
+     "id": 16,
+     "name": "Fantasy",
+     "slug": "fantasy"
+    },
+    {
+     "id": 18,
+     "name": "Game",
+     "slug": "game"
+    },
+    {
+     "id": 67,
+     "name": "Tower",
+     "slug": "tower"
+    }
+   ],
+   "latest_chapters": [
+    {
+     "id": 262243,
+     "series_id": 0,
+     "number": 281,
+     "title": "Demon Realm War (3)",
+     "slug": "chapter-281",
+     "page_count": 0,
+     "is_premium": true,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-16T01:32:07.887793Z",
+     "published_at": "2026-10-15T19:32:07.887793Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    },
+    {
+     "id": 262115,
+     "series_id": 0,
+     "number": 280,
+     "title": "Demon Realm War (2)",
+     "slug": "chapter-280",
+     "page_count": 0,
+     "is_premium": false,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-11T05:17:13.342937Z",
+     "published_at": "2026-10-10T23:17:13.342937Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    },
+    {
+     "id": 261908,
+     "series_id": 0,
+     "number": 279,
+     "title": "Demon Realm War (1)",
+     "slug": "chapter-279",
+     "page_count": 0,
+     "is_premium": false,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-01T22:18:47.966902Z",
+     "published_at": "2026-10-01T16:18:47.966902Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    }
+   ]
+  },
+  {
+   "id": 2187,
+   "slug": "raising-villains-the-right-way",
+   "title": "Raising Villains the Right Way",
+   "alt_titles": [
+    "Became the Patron of Villains"
+   ],
+   "description": "",
+   "cover": "https://cdn.asurascans.com/asura-images/covers/raising-villains-the-right-way.a524e2.webp",
+   "banner": "https://cdn.asurascans.com/asura-images/banners/raising-villains-the-right-way.jpg",
+   "status": "ongoing",
+   "type": "manhwa",
+   "author": "Bomhan Bangul",
+   "artist": "Studio Lico",
+   "popularity_rank": 29,
+   "bookmark_count": 86424,
+   "rating": 9.544742729306488,
+   "chapter_count": 57,
+   "last_chapter_at": "2026-10-15T19:09:09.618433Z",
+   "created_at": "0001-01-01T00:00:00Z",
+   "updated_at": "2026-10-15T19:59:26.049896Z",
+   "public_url": "/comics/raising-villains-the-right-way-1bb35e56",
+   "source_url": "/s/2187",
+   "genres": [
+    {
+     "id": 1,
+     "name": "Action",
+     "slug": "action"
+    },
+    {
+     "id": 4,
+     "name": "Adventure",
+     "slug": "adventure"
+    },
+    {
+     "id": 7,
+     "name": "Comedy",
+     "slug": "comedy"
+    },
+    {
+     "id": 16,
+     "name": "Fantasy",
+     "slug": "fantasy"
+    },
+    {
+     "id": 55,
+     "name": "Shounen",
+     "slug": "shounen"
+    },
+    {
+     "id": 72,
+     "name": "Villain",
+     "slug": "villain"
+    }
+   ],
+   "latest_chapters": [
+    {
+     "id": 262242,
+     "series_id": 0,
+     "number": 57,
+     "slug": "chapter-57",
+     "page_count": 0,
+     "is_premium": true,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-16T01:09:09.618433Z",
+     "published_at": "2026-10-15T19:09:09.618433Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    },
+    {
+     "id": 262088,
+     "series_id": 0,
+     "number": 56,
+     "slug": "chapter-56",
+     "page_count": 0,
+     "is_premium": false,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-10T22:43:23.013316Z",
+     "published_at": "2026-10-10T16:43:23.013316Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    },
+    {
+     "id": 261915,
+     "series_id": 0,
+     "number": 55,
+     "slug": "chapter-55",
+     "page_count": 0,
+     "is_premium": false,
+     "comments_enabled": false,
+     "early_access_until": "2026-10-02T04:17:00.476453Z",
+     "published_at": "2026-10-01T22:17:00.476453Z",
+     "view_count": 0,
+     "created_at": "0001-01-01T00:00:00Z"
+    }
+   ],
+   "linked_novel": {
+    "id": 25,
+    "title": "Raising Villains the Right Way",
+    "slug": "raising-villains-the-right-way",
+    "cover_url": "https://cdn.asurascans.com/asura-images/covers/raising-villains-the-right-way.fd29f3.webp",
+    "chapter_count": 173,
+    "status": "ongoing"
+   }
+  }
+ ],
+ "meta": {
+  "total": 354,
+  "per_page": 20,
+  "has_more": true
+ }
+}

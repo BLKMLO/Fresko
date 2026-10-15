@@ -1,0 +1,49 @@
+{
+ "data": [
+  {
+   "id": 262115,
+   "series_id": 1896,
+   "number": 280,
+   "title": "Demon Realm War (2)",
+   "slug": "chapter-280",
+   "page_count": 26,
+   "is_premium": false,
+   "comments_enabled": false,
+   "early_access_until": "2026-10-11T05:17:13.342937Z",
+   "published_at": "2026-10-10T23:17:13.342937Z",
+   "view_count": 173927,
+   "created_at": "2026-10-10T23:17:15.477248Z",
+   "series_slug": "solo-max-level-newbie"
+  },
+  {
+   "id": 261908,
+   "series_id": 1896,
+   "number": 279,
+   "title": "Demon Realm War (1)",
+   "slug": "chapter-279",
+   "page_count": 26,
+   "is_premium": false,
+   "comments_enabled": false,
+   "early_access_until": "2026-10-01T22:18:47.966902Z",
+   "published_at": "2026-10-01T16:18:47.966902Z",
+   "view_count": 273806,
+   "created_at": "2026-10-01T16:18:49.580216Z",
+   "series_slug": "solo-max-level-newbie"
+  },
+  {
+   "id": 261732,
+   "series_id": 1896,
+   "number": 278,
+   "title": "A New Ancient Species (2)",
+   "slug": "chapter-278",
+   "page_count": 28,
+   "is_premium": false,
+   "comments_enabled": false,
+   "early_access_until": "2026-09-25T00:52:38.828587Z",
+   "published_at": "2026-09-24T18:52:38.828587Z",
+   "view_count": 261533,
+   "created_at": "2026-09-24T18:52:40.370891Z",
+   "series_slug": "solo-max-level-newbie"
+  }
+ ]
+}
