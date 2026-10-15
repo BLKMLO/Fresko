@@ -8,13 +8,14 @@ jamais sur une autre branche.
 
 App Android peu gourmande en batterie qui vérifie toutes les X minutes (10 par
 défaut) si un chapitre d'une œuvre suivie est sorti, sur Asura Scans et Demonic Scans.
+Depuis la v0.2.0, **la recherche est le seul moyen de trouver une œuvre** (plus de catalogue).
 
 ## Architecture (Gradle multi-modules)
 
 ```
-app/                 UI Compose (bibliothèque + paramètres), câblage (AppContainer), SourceRegistry
+app/                 UI Compose (écran suivis+recherche, fiche œuvre, réglages), thème, câblage (AppContainer), SourceRegistry
 feature/checker/     WorkManager : CheckWorker, CheckScheduler, ChapterNotifier (Android)
-core/data/           Room (œuvres) + DataStore (réglages, curseurs de check) (Android)
+core/data/           Room (œuvres suivies, schéma v2) + DataStore (réglages, curseurs de check) (Android)
 core/domain/         UpdateChecker : logique du check, pure Kotlin, testée
 core/source/         Interface Source + UpdateCursor/RecentUpdates (pure Kotlin)
 core/network/        HttpFetcher (interface) + OkHttpFetcher (pure Kotlin)
@@ -47,7 +48,15 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    check réussi (`coversCursor = false`), requête dédiée par œuvre suivie absente.
 3. Chapitre plus récent (numéro supérieur, sinon URL différente) → notification.
    Œuvre sans chapitre connu → initialisation silencieuse.
-4. Le curseur (`UpdateCursor` : instant + ancres) n'est enregistré que si tout a été vérifié.
+   Les mises à jour récentes donnent **plusieurs** chapitres par œuvre (`recentByKey`,
+   du plus récent au plus ancien) : utile pour l'accès anticipé.
+4. **Accès anticipé par œuvre** (`notify_early_access`, sources avec `hasEarlyAccess`,
+   aujourd'hui Asura) : si désactivé, on prend le plus récent chapitre *non* anticipé.
+   Un chapitre anticipé ignoré met l'œuvre en attente (`early_pending`) : comme le
+   passage en gratuit ne fait pas remonter la série dans la liste du site, l'œuvre est
+   alors vérifiée par requête dédiée à chaque check jusqu'à l'alerte (l'endpoint
+   chapitres d'Asura ne renvoie que les chapitres gratuits).
+5. Le curseur (`UpdateCursor` : instant + ancres) n'est enregistré que si tout a été vérifié.
 
 ### Couverture de la période
 
@@ -63,19 +72,21 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
 
 | Source | Usage | URL |
 |---|---|---|
-| Asura | catalogue / check | `https://api.asurascans.com/api/series?sort=latest&order=desc&limit=20&offset=N` (20 max/page, `meta.has_more`) |
+| Asura | check | `https://api.asurascans.com/api/series?sort=latest&order=desc&limit=20&offset=N` (20 max/page, `meta.has_more`) |
 | Asura | dernier chapitre | `https://api.asurascans.com/api/series/{slug}/chapters` (n'inclut pas les chapitres premium/accès anticipé) |
 | Asura | recherche | `.../api/series?search=…` |
 | Asura | URL chapitre | `https://asurascans.com{public_url}/chapter/{n}` ; `/comics/{slug}` redirige (302) |
 | Demonic | check | `https://demonicscans.org/lastupdates.php?list=N` (40 œuvres/page, `div.updates-element`) |
-| Demonic | catalogue | `translationlist.php?list=N` (leurs traductions ; 525 œuvres le 2026-10-15) |
+| Demonic | (plus utilisé depuis v0.2.0) | `translationlist.php?list=N` (leurs traductions ; 525 œuvres le 2026-10-15) |
 | Demonic | recherche | `search.php?manga=…` |
 | Demonic | dernier chapitre | `/manga/{slug}` (`#chapters-list li a`) |
 
 - asuracomic.net → 301 vers asurascans.com.
-- Demonic agrège ≈ 250 pages × 56 œuvres sur `advanced.php` (page 240 pleine, 260 vide) :
-  trop lourd à lister ; le catalogue = leurs traductions, le reste via la recherche distante
-  (saisie ≥ 3 caractères, résultats ajoutés au catalogue local).
+- Demonic agrège ≈ 250 pages × 56 œuvres sur `advanced.php` (page 240 pleine, 260 vide).
+- Recherche dans l'app : à partir de 2 caractères, anti-rebond 350 ms, toutes les sources
+  activées en parallèle ; résultats en mémoire (seules les œuvres suivies sont en base).
+- La recherche Demonic ne fournit pas de dernier chapitre ; ses URL de vignettes
+  contiennent des espaces bruts (encodés en `%20` par le parser).
 - Asura : 353 séries chargées par l'app lors du test réel du 2026-10-15 (`meta.total` annonçait 354).
 - Chapitres Asura `is_premium` / `early_access_until` : notifiés avec la mention « accès anticipé ».
 
@@ -98,16 +109,29 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
   Maven Central par `https://maven-central.storage-download.googleapis.com/maven2/`.
   SDK Android installé dans `/opt/android-sdk` (`local.properties`, non versionné).
 - CI : `.github/workflows/android.yml` (tests + APK release en artefact).
+- **Release** : `.github/workflows/release.yml` sur tag `v*` → tests, APK, release GitHub
+  avec `fresko-vX.Y.Z.apk` et les notes `.github/release-notes/vX.Y.Z.md` (à écrire
+  avant de taguer). Procédure : version dans `app/build.gradle.kts` (versionCode +1),
+  notes, commit sur `main`, `git tag vX.Y.Z && git push origin vX.Y.Z`.
+- **Signature** : le dépôt est public, aucune clé n'est versionnée. Si les secrets
+  `FRESKO_KEYSTORE_B64`, `FRESKO_KEYSTORE_PASSWORD`, `FRESKO_KEY_ALIAS`, `FRESKO_KEY_PASSWORD`
+  existent, la release est signée avec ; sinon clé debug de la CI (différente à chaque
+  run → mise à jour impossible par-dessus, il faut désinstaller).
+- **Captures d'écran** (pas d'appareil ici) : `./gradlew :app:testDebugUnitTest -Pscreenshots`
+  → `app/build/screenshots/*.png` (Robolectric, rendu natif, données d'exemple, sans
+  couvertures). Test `app/src/test/.../screenshots/ScreenshotTest.kt`, exclu par défaut.
+  Les écrans sont sans état (`LibraryContent`, `SettingsContent`) pour cela.
 
 ## Limites connues / pistes
 
 - Pas d'émulateur dans l'environnement de dev (pas de KVM) : UI et WorkManager
   **non testés sur appareil** à ce jour. Testés : parsers (fixtures réelles), logique
-  de check (unitaires), appels réels aux deux sites (test de fumée JVM, non versionné).
+  de check (unitaires), appels réels aux deux sites (test de fumée JVM, non versionné),
+  rendu des écrans (captures Robolectric), migration Room 1→2 (rejouée sur SQLite).
 - Le scraping dépend de la structure des sites : si un site change, seuls les
   fichiers de `sources/<site>/` sont à adapter (fixtures de test à recapturer).
 - Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
-  des œuvres suivies, ignorer les chapitres en accès anticipé.
+  des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic.
 
 ## Journal
 
@@ -122,3 +146,19 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
   car l'endpoint chapitres d'Asura omet les chapitres en accès anticipé.
 - Correctif : un maillon de chaîne interrompu ne replanifie pas (sinon chaîne doublée).
 - 22 tests unitaires verts ; `assembleDebug` et `assembleRelease` (R8) OK.
+
+### 2026-10-15 — Session 2 : v0.2.0
+- Demandes : recherche = seul moyen de trouver une œuvre ; accès anticipé Asura
+  paramétrable par œuvre ; application « la plus esthétique possible » ; release v0.2.0.
+- Suppression du catalogue (`Source.fetchCatalog` retiré, `search` obligatoire).
+  Base Room v2 : `notify_early_access`, `early_pending`, suppression des œuvres non suivies
+  (migration rejouée sur SQLite : schéma identique à celui exporté par Room).
+- `RecentUpdates.recentByKey` (liste de chapitres) + logique d'accès anticipé dans
+  `UpdateChecker` (4 nouveaux tests ; 26 tests au total).
+- Nouvelle UI : thème de marque (encre/corail/lavande, clair et sombre), en-tête en
+  dégradé, recherche en direct par source avec squelettes de chargement, cartes avec
+  pastilles source / « Nouveau » / « Anticipé », fiche œuvre (feuille modale), tirer pour
+  vérifier, réglages en cartes, nouvelle icône adaptative, transitions de navigation.
+- Captures Robolectric pour valider le rendu (corrigé : badge « Anticipé » qui se
+  coupait, dates forcées en français).
+- Release : workflow sur tag, notes dans `.github/release-notes/`.

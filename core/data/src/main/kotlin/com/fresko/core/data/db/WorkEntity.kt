@@ -8,9 +8,9 @@ import com.fresko.core.model.TrackedWork
 import com.fresko.core.model.WorkKey
 
 /**
- * Une œuvre du catalogue local. Pour une œuvre suivie, les colonnes `chapter_*`
- * contiennent le dernier chapitre déjà notifié (elles ne sont plus écrasées par
- * le rafraîchissement du catalogue).
+ * Une œuvre suivie (depuis la v0.2.0, la table ne contient que les œuvres suivies :
+ * les œuvres se trouvent par la recherche). Les colonnes `chapter_*` contiennent
+ * le dernier chapitre déjà notifié.
  */
 @Entity(tableName = "works", primaryKeys = ["source_id", "work_key"])
 data class WorkEntity(
@@ -27,6 +27,8 @@ data class WorkEntity(
     @ColumnInfo(name = "chapter_published_at") val chapterPublishedAt: Long? = null,
     @ColumnInfo(name = "chapter_early_access") val chapterEarlyAccess: Boolean = false,
     @ColumnInfo(name = "last_checked_at") val lastCheckedAt: Long? = null,
+    @ColumnInfo(name = "notify_early_access", defaultValue = "1") val notifyEarlyAccess: Boolean = true,
+    @ColumnInfo(name = "early_pending", defaultValue = "0") val earlyPending: Boolean = false,
 ) {
     val key: WorkKey get() = WorkKey(SourceId(sourceId), workKey)
 
@@ -39,5 +41,5 @@ data class WorkEntity(
             isEarlyAccess = chapterEarlyAccess,
         )
 
-    fun toTrackedWork() = TrackedWork(key, title, url, chapter)
+    fun toTrackedWork() = TrackedWork(key, title, url, chapter, notifyEarlyAccess, earlyPending)
 }

@@ -12,8 +12,21 @@ android {
         applicationId = "com.fresko.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+    }
+
+    // Signature : clé fournie par la CI (secrets GitHub) si présente, sinon clé debug.
+    val keystorePath = System.getenv("FRESKO_KEYSTORE_FILE")
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("FRESKO_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("FRESKO_KEY_ALIAS")
+                keyPassword = System.getenv("FRESKO_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -21,8 +34,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signée avec la clé debug pour pouvoir installer l'APK directement.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
@@ -31,7 +43,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 kotlin {
@@ -55,4 +74,24 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
+}
+
+// Captures d'écran (Robolectric, rendu natif) : ./gradlew :app:testDebugUnitTest -Pscreenshots
+// Images écrites dans app/build/screenshots/. Exclues par défaut (téléchargement lourd).
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("screenshots")) {
+        systemProperty("fresko.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.path)
+        systemProperty(
+            "robolectric.dependency.repo.url",
+            "https://maven-central.storage-download.googleapis.com/maven2",
+        )
+    } else {
+        exclude("**/screenshots/**")
+    }
 }

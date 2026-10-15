@@ -14,16 +14,11 @@ interface Source {
     val id: SourceId
     val displayName: String
 
-    /**
-     * Catalogue listé par l'application. Peut être partiel si le site est trop
-     * gros (voir [supportsRemoteSearch]). Appelé rarement (rafraîchissement manuel).
-     */
-    suspend fun fetchCatalog(onProgress: (loaded: Int) -> Unit = {}): List<WorkInfo>
+    /** True si le site publie des chapitres en accès anticipé (payant / premium). */
+    val hasEarlyAccess: Boolean get() = false
 
-    /** True si [search] interroge le site (utile quand le catalogue est partiel). */
-    val supportsRemoteSearch: Boolean get() = false
-
-    suspend fun search(query: String): List<WorkInfo> = emptyList()
+    /** Recherche sur le site : c'est le seul moyen de trouver une œuvre à suivre. */
+    suspend fun search(query: String): List<WorkInfo>
 
     /** Dernier chapitre d'une œuvre précise (requête dédiée, plus coûteuse). */
     suspend fun fetchLatestChapter(key: WorkKey): ChapterInfo?
@@ -52,9 +47,10 @@ data class UpdateCursor(
 /**
  * Résultat de [Source.fetchRecentUpdates].
  *
- * @param latestByKey dernier chapitre de chaque œuvre présente dans les mises à jour.
+ * @param recentByKey derniers chapitres (du plus récent au plus ancien) de chaque
+ *   œuvre présente dans les mises à jour.
  * @param coversCursor true si toute œuvre mise à jour depuis le curseur figure
- *   forcément dans [latestByKey]. Sinon le vérificateur interroge chaque œuvre suivie.
+ *   forcément dans [recentByKey]. Sinon le vérificateur interroge chaque œuvre suivie.
  * @param anchors entrées vues, à mémoriser pour le prochain check.
  *
  * Principe des ancres : la liste du site est triée par date de mise à jour. Si une
@@ -63,7 +59,7 @@ data class UpdateCursor(
  * d'elle, dans les pages chargées.
  */
 data class RecentUpdates(
-    val latestByKey: Map<WorkKey, ChapterInfo>,
+    val recentByKey: Map<WorkKey, List<ChapterInfo>>,
     val coversCursor: Boolean,
     val anchors: Set<String> = emptySet(),
 )

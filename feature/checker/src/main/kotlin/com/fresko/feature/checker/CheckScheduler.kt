@@ -8,8 +8,11 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 
 /**
@@ -69,6 +72,12 @@ class CheckScheduler(context: Context) {
             .build()
         workManager.enqueueUniqueWork(MANUAL_WORK, ExistingWorkPolicy.KEEP, request)
     }
+
+    /** True tant qu'un check manuel est en attente ou en cours. */
+    fun observeManualCheck(): Flow<Boolean> =
+        workManager.getWorkInfosForUniqueWorkFlow(MANUAL_WORK).map { infos ->
+            infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+        }
 
     private fun chainRequest(intervalMinutes: Int) = OneTimeWorkRequestBuilder<CheckWorker>()
         .setInitialDelay(intervalMinutes.toLong(), TimeUnit.MINUTES)

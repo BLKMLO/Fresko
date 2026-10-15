@@ -27,14 +27,17 @@ class AsuraSourceTest {
         val http = FakeHttp { resource("series_page.json") }
         val updates = AsuraSource(http).fetchRecentUpdates(cursor = null)
 
-        val solo = updates.latestByKey.getValue(WorkKey(AsuraSource.ID, "solo-max-level-newbie"))
+        val soloChapters = updates.recentByKey.getValue(WorkKey(AsuraSource.ID, "solo-max-level-newbie"))
+        assertEquals(listOf(281.0, 280.0, 279.0), soloChapters.map { it.number })
+        assertEquals(listOf(true, false, false), soloChapters.map { it.isEarlyAccess })
+        val solo = soloChapters.first()
         assertEquals(281.0, solo.number!!, 0.0)
         assertTrue(solo.isEarlyAccess)
         assertEquals(
             "https://asurascans.com/comics/solo-max-level-newbie-1bb35e56/chapter/281",
             solo.url,
         )
-        assertEquals(3, updates.latestByKey.size)
+        assertEquals(3, updates.recentByKey.size)
         assertEquals(1, http.calls.size) // sans date de référence : une seule page
     }
 
@@ -68,13 +71,14 @@ class AsuraSourceTest {
     }
 
     @Test
-    fun `catalogue pagine jusqu'a has_more faux`() = runTest {
-        val page = resource("series_page.json")
-        val last = page.replace("\"has_more\": true", "\"has_more\": false")
-        val http = FakeHttp { url -> if (url.contains("offset=0")) page else last }
-        val catalog = AsuraSource(http).fetchCatalog()
-        assertEquals(2, http.calls.size)
-        assertEquals(3, catalog.size) // mêmes séries sur les 2 pages : dédoublonnées
+    fun `recherche - meme format que la liste, dernier chapitre inclus`() = runTest {
+        val http = FakeHttp { resource("series_page.json") }
+        val results = AsuraSource(http).search("solo max")
+        assertEquals("https://api.asurascans.com/api/series?search=solo+max&limit=20&offset=0", http.calls.single())
+        val solo = results.first { it.key.key == "solo-max-level-newbie" }
+        assertEquals("Solo Max-Level Newbie", solo.title)
+        assertEquals("https://asurascans.com/comics/solo-max-level-newbie-1bb35e56", solo.url)
+        assertEquals(281.0, solo.latestChapter!!.number!!, 0.0)
     }
 
     @Test

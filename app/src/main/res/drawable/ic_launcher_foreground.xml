@@ -3,14 +3,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Livre ouvert stylisé + point de notification -->
+    <!-- Livre ouvert + marque-page + pastille de notification (zone sûre : cercle de 66 dp) -->
     <path
-        android:fillColor="#FFF5F0FF"
-        android:pathData="M30,38c8,-3 16,-3 24,2v32c-8,-5 -16,-5 -24,-2z" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M32,40c7,-3.5 14.5,-3.5 21,1.5v29c-6.5,-5 -14,-5 -21,-1.5z" />
     <path
-        android:fillColor="#FFD9CCFF"
-        android:pathData="M78,38c-8,-3 -16,-3 -24,2v32c8,-5 16,-5 24,-2z" />
+        android:fillColor="#E6FFFFFF"
+        android:pathData="M76,40c-7,-3.5 -14.5,-3.5 -21,1.5v29c6.5,-5 14,-5 21,-1.5z" />
     <path
-        android:fillColor="#FFFF6740"
-        android:pathData="M76,34m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+        android:fillColor="#FF16131F"
+        android:pathData="M62,40.5h6v13l-3,-2.2l-3,2.2z" />
+    <path
+        android:fillColor="#FF16131F"
+        android:pathData="M76,33m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M76,33m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
 </vector>

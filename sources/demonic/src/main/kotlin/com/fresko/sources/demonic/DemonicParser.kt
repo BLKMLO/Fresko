@@ -10,7 +10,7 @@ import java.time.ZoneOffset
 
 /**
  * Parsing HTML de demonicscans.org. Structure observée le 2026-10-15 :
- * - listes (lastupdates.php, translationlist.php) : `div.updates-element`
+ * - liste des mises à jour (lastupdates.php) : `div.updates-element`
  *   contenant un lien `/manga/<slug>` et des lignes `.chap-date`
  *   ("Chapter N" + date AAAA-MM-JJ) ;
  * - recherche (search.php?manga=…) : liens `a[href^=/manga/]` avec titre dans un `div` ;
@@ -18,7 +18,10 @@ import java.time.ZoneOffset
  */
 internal class DemonicParser(private val baseUrl: String) {
 
-    fun parseUpdatesList(html: String): List<WorkInfo> {
+    /** Entrée d'une liste de mises à jour : l'œuvre + ses derniers chapitres. */
+    data class UpdateEntry(val key: WorkKey, val title: String, val recentChapters: List<ChapterInfo>)
+
+    fun parseUpdatesList(html: String): List<UpdateEntry> {
         val doc = Jsoup.parse(html, baseUrl)
         return doc.select("div.updates-element").mapNotNull { el ->
             val link = el.selectFirst("a[href^=/manga/]") ?: return@mapNotNull null
@@ -26,7 +29,6 @@ internal class DemonicParser(private val baseUrl: String) {
             val title = el.selectFirst("h2 a[title]")?.attr("title")?.trim()
                 ?.takeIf { it.isNotEmpty() }
                 ?: link.attr("title").trim().ifEmpty { el.selectFirst("h2")?.text().orEmpty() }
-            val cover = el.selectFirst("img")?.absUrl("src")?.takeIf { it.isNotEmpty() }
             val chapters = el.select(".chap-date").mapNotNull { row ->
                 val links = row.select("a")
                 val first = links.firstOrNull() ?: return@mapNotNull null
@@ -36,12 +38,10 @@ internal class DemonicParser(private val baseUrl: String) {
                     date = links.getOrNull(1)?.text(),
                 )
             }
-            WorkInfo(
+            UpdateEntry(
                 key = keyOf(href),
                 title = title,
-                url = absolute(href),
-                coverUrl = cover,
-                latestChapter = chapters.latest(),
+                recentChapters = chapters.sortedByDescending { it.number ?: Double.MIN_VALUE },
             )
         }.distinctBy { it.key }
     }
@@ -57,7 +57,8 @@ internal class DemonicParser(private val baseUrl: String) {
                 key = keyOf(href),
                 title = title,
                 url = absolute(href),
-                coverUrl = a.selectFirst("img")?.absUrl("src")?.takeIf { it.isNotEmpty() },
+                // Les vignettes du site contiennent des espaces bruts dans l'URL.
+                coverUrl = a.selectFirst("img")?.absUrl("src")?.takeIf { it.isNotEmpty() }?.replace(" ", "%20"),
             )
         }.distinctBy { it.key }
     }

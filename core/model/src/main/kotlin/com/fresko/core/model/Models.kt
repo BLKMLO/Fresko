@@ -32,12 +32,21 @@ data class ChapterInfo(
     val isEarlyAccess: Boolean = false,
 )
 
-/** Œuvre suivie par l'utilisateur, avec le dernier chapitre déjà notifié. */
+/**
+ * Œuvre suivie par l'utilisateur, avec le dernier chapitre déjà notifié.
+ *
+ * @param notifyEarlyAccess false : les chapitres en accès anticipé sont ignorés,
+ *   l'alerte arrive quand le chapitre devient gratuit.
+ * @param earlyPending un chapitre en accès anticipé a été ignoré et n'est pas
+ *   encore gratuit : l'œuvre est vérifiée individuellement à chaque check.
+ */
 data class TrackedWork(
     val key: WorkKey,
     val title: String,
     val url: String,
     val lastKnownChapter: ChapterInfo?,
+    val notifyEarlyAccess: Boolean = true,
+    val earlyPending: Boolean = false,
 )
 
 /** Nouveau chapitre détecté pour une œuvre suivie. */

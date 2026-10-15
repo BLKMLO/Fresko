@@ -10,6 +10,7 @@ import com.fresko.core.source.UpdateCursor
 interface TrackedWorksStore {
     suspend fun trackedWorks(sourceId: SourceId): List<TrackedWork>
     suspend fun saveLatestChapter(key: WorkKey, chapter: ChapterInfo, checkedAtMillis: Long)
+    suspend fun setEarlyPending(key: WorkKey, pending: Boolean)
 }
 
 /** État persistant du check (implémenté par core:data avec DataStore). */

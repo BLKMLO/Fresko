@@ -13,10 +13,7 @@ import java.net.URLEncoder
 /**
  * Demonic Scans (demonicscans.org). Pas d'API : parsing HTML via [DemonicParser].
  *
- * Le site agrège des milliers d'œuvres (≈ 250 pages de 56 sur advanced.php au
- * 2026-10-15). Pour rester léger, le catalogue listé = leurs traductions
- * (translationlist.php, ≈ 30 pages de 20) ; le reste est accessible par la
- * recherche distante (search.php).
+ * Les œuvres se trouvent par la recherche du site (search.php).
  */
 class DemonicSource(
     private val http: HttpFetcher,
@@ -25,22 +22,7 @@ class DemonicSource(
 
     override val id = ID
     override val displayName = "Demonic Scans"
-    override val supportsRemoteSearch = true
-
     private val parser = DemonicParser(baseUrl)
-
-    override suspend fun fetchCatalog(onProgress: (Int) -> Unit): List<WorkInfo> {
-        val result = LinkedHashMap<WorkKey, WorkInfo>()
-        for (page in 1..MAX_CATALOG_PAGES) {
-            val items = parser.parseUpdatesList(http.get("$baseUrl/translationlist.php?list=$page"))
-            if (items.isEmpty()) break
-            val before = result.size
-            items.forEach { result.putIfAbsent(it.key, it) }
-            onProgress(result.size)
-            if (result.size == before) break // page répétée : fin de liste
-        }
-        return result.values.toList()
-    }
 
     override suspend fun search(query: String): List<WorkInfo> {
         val q = URLEncoder.encode(query, "UTF-8")
@@ -51,7 +33,7 @@ class DemonicSource(
         parser.parseWorkPageLatest(http.get(parser.workUrl(key)))
 
     override suspend fun fetchRecentUpdates(cursor: UpdateCursor?): RecentUpdates {
-        val latest = mutableMapOf<WorkKey, ChapterInfo>()
+        val recent = mutableMapOf<WorkKey, List<ChapterInfo>>()
         val anchors = mutableSetOf<String>()
         var covered = false
         for (page in 1..MAX_UPDATE_PAGES) {
@@ -61,23 +43,22 @@ class DemonicSource(
                 break
             }
             for (w in items) {
-                val ch = w.latestChapter ?: continue
-                latest.putIfAbsent(w.key, ch)
-                anchors += ch.url
+                if (w.recentChapters.isEmpty()) continue
+                recent.putIfAbsent(w.key, w.recentChapters)
+                anchors += w.recentChapters.first().url
             }
             if (cursor == null) break
             covered = anchors.any { it in cursor.anchors } || run {
-                val oldestDay = items.mapNotNull { it.latestChapter?.publishedAtMillis }.minOrNull()
+                val oldestDay = items.mapNotNull { it.recentChapters.firstOrNull()?.publishedAtMillis }.minOrNull()
                 oldestDay != null && coverageStart(oldestDay) <= cursor.sinceMillis
             }
             if (covered) break
         }
-        return RecentUpdates(latest, covered, anchors)
+        return RecentUpdates(recent, covered, anchors)
     }
 
     companion object {
         val ID = SourceId("demonic")
-        private const val MAX_CATALOG_PAGES = 80
         private const val MAX_UPDATE_PAGES = 3
         private const val DAY = 24 * 3600 * 1000L
         private const val MAX_TZ_OFFSET = 14 * 3600 * 1000L

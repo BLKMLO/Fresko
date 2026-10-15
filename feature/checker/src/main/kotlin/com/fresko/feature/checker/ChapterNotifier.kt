@@ -38,6 +38,7 @@ class ChapterNotifier(private val context: Context) {
             }
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_chapter)
+                .setColor(ACCENT)
                 .setContentTitle(item.work.title)
                 .setContentText(text)
                 .setSubText(item.work.key.sourceId.value)
@@ -92,6 +93,7 @@ class ChapterNotifier(private val context: Context) {
 
     companion object {
         const val CHANNEL_ID = "new_chapters"
+        private const val ACCENT = 0xFFFF6B4A.toInt()
         private const val GROUP = "fresko_new_chapters"
         private const val SUMMARY_ID = 0x5EED
     }

@@ -18,7 +18,8 @@ class UpdateCheckerTest {
 
     private val src = SourceId("fake")
     private fun key(k: String) = WorkKey(src, k)
-    private fun ch(n: Double) = ChapterInfo(n, "Chapitre $n", "https://x/$n")
+    private fun ch(n: Double, early: Boolean = false) =
+        ChapterInfo(n, "Chapitre $n", "https://x/$n", isEarlyAccess = early)
 
     private class FakeSource(
         override val id: SourceId,
@@ -28,7 +29,7 @@ class UpdateCheckerTest {
     ) : Source {
         override val displayName = "Fake"
         val perWorkCalls = mutableListOf<WorkKey>()
-        override suspend fun fetchCatalog(onProgress: (Int) -> Unit) = emptyList<WorkInfo>()
+        override suspend fun search(query: String) = emptyList<WorkInfo>()
         override suspend fun fetchLatestChapter(key: WorkKey): ChapterInfo? {
             perWorkCalls += key
             if (failPerWork) throw IOException("réseau")
@@ -45,17 +46,21 @@ class UpdateCheckerTest {
         override suspend fun saveLatestChapter(key: WorkKey, chapter: ChapterInfo, checkedAtMillis: Long) {
             works[key] = works.getValue(key).copy(lastKnownChapter = chapter)
         }
+        override suspend fun setEarlyPending(key: WorkKey, pending: Boolean) {
+            works[key] = works.getValue(key).copy(earlyPending = pending)
+        }
         override suspend fun cursor(sourceId: SourceId) = cursors[sourceId]
         override suspend fun saveCursor(sourceId: SourceId, cursor: UpdateCursor) { cursors[sourceId] = cursor }
         override suspend fun enabledSourceIds() = enabledIds
     }
 
-    private fun tracked(k: String, known: ChapterInfo?) = TrackedWork(key(k), k, "https://x/$k", known)
+    private fun tracked(k: String, known: ChapterInfo?, early: Boolean = true, pending: Boolean = false) =
+        TrackedWork(key(k), k, "https://x/$k", known, notifyEarlyAccess = early, earlyPending = pending)
 
     @Test
     fun `nouveau chapitre detecte depuis les mises a jour recentes`() = runTest {
         val store = Store(listOf(tracked("a", ch(10.0)))).apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
-        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to ch(11.0)), coversCursor = true, anchors = setOf("x")))
+        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to listOf(ch(11.0))), coversCursor = true, anchors = setOf("x")))
         val report = UpdateChecker(listOf(source), store, store, store, clock = { 2_000 }).check()
 
         assertEquals(1, report.newChapters.size)
@@ -68,7 +73,7 @@ class UpdateCheckerTest {
     @Test
     fun `pas de notification si le chapitre est deja connu`() = runTest {
         val store = Store(listOf(tracked("a", ch(11.0)))).apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
-        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to ch(11.0)), true))
+        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to listOf(ch(11.0))), true))
         val report = UpdateChecker(listOf(source), store, store, store).check()
         assertTrue(report.newChapters.isEmpty())
     }
@@ -116,7 +121,7 @@ class UpdateCheckerTest {
     fun `echec partiel - chapitres trouves notifies, periode non validee`() = runTest {
         val store = Store(listOf(tracked("a", ch(1.0)), tracked("b", ch(1.0))))
         val source = FakeSource(
-            src, RecentUpdates(mapOf(key("a") to ch(2.0)), false), failPerWork = true,
+            src, RecentUpdates(mapOf(key("a") to listOf(ch(2.0))), false), failPerWork = true,
         )
         val report = UpdateChecker(listOf(source), store, store, store).check()
         assertEquals(1, report.newChapters.size)
@@ -127,8 +132,48 @@ class UpdateCheckerTest {
     @Test
     fun `source desactivee ignoree`() = runTest {
         val store = Store(listOf(tracked("a", ch(1.0)))).apply { enabledIds = emptySet() }
-        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to ch(2.0)), false))
+        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to listOf(ch(2.0))), false))
         val report = UpdateChecker(listOf(source), store, store, store).check()
         assertTrue(report.newChapters.isEmpty())
+    }
+
+    @Test
+    fun `acces anticipe autorise - notifie le chapitre premium`() = runTest {
+        val store = Store(listOf(tracked("a", ch(10.0)))).apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to listOf(ch(11.0, early = true), ch(10.0))), true))
+        val report = UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(11.0, report.newChapters.single().chapter.number!!, 0.0)
+    }
+
+    @Test
+    fun `acces anticipe ignore - pas d'alerte, oeuvre mise en attente`() = runTest {
+        val store = Store(listOf(tracked("a", ch(10.0), early = false))).apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to listOf(ch(11.0, early = true), ch(10.0))), true))
+        val report = UpdateChecker(listOf(source), store, store, store).check()
+        assertTrue(report.newChapters.isEmpty())
+        assertEquals(10.0, store.works.getValue(key("a")).lastKnownChapter!!.number!!, 0.0)
+        assertTrue(store.works.getValue(key("a")).earlyPending)
+    }
+
+    @Test
+    fun `chapitre devenu gratuit - alerte via la requete dediee meme si la periode est couverte`() = runTest {
+        val store = Store(listOf(tracked("a", ch(10.0), early = false, pending = true)))
+            .apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        // L'œuvre n'est plus dans les mises à jour : seule la requête dédiée la voit.
+        val source = FakeSource(src, RecentUpdates(emptyMap(), true), perWork = mapOf(key("a") to ch(11.0)))
+        val report = UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(listOf(key("a")), source.perWorkCalls)
+        assertEquals(11.0, report.newChapters.single().chapter.number!!, 0.0)
+        assertTrue(!store.works.getValue(key("a")).earlyPending)
+    }
+
+    @Test
+    fun `toujours en acces anticipe - reste en attente sans alerte`() = runTest {
+        val store = Store(listOf(tracked("a", ch(10.0), early = false, pending = true)))
+            .apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        val source = FakeSource(src, RecentUpdates(emptyMap(), true), perWork = mapOf(key("a") to ch(10.0)))
+        val report = UpdateChecker(listOf(source), store, store, store).check()
+        assertTrue(report.newChapters.isEmpty())
+        assertTrue(store.works.getValue(key("a")).earlyPending)
     }
 }

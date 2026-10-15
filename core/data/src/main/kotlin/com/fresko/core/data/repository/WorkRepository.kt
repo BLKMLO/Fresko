@@ -10,19 +10,38 @@ import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import kotlinx.coroutines.flow.Flow
 
-/** Point d'accès unique aux œuvres pour l'UI et le check. */
+/** Point d'accès unique aux œuvres suivies pour l'UI et le check. */
 class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
 
-    fun observeAll(): Flow<List<WorkEntity>> = dao.observeAll()
-
-    suspend fun catalogSize(sourceId: SourceId): Int = dao.count(sourceId.value)
-
-    suspend fun mergeCatalog(items: List<WorkInfo>) = dao.mergeCatalog(items.map { it.toEntity() })
+    fun observeTracked(): Flow<List<WorkEntity>> = dao.observeTracked()
 
     suspend fun get(key: WorkKey): WorkEntity? = dao.get(key.sourceId.value, key.key)
 
-    suspend fun setTracked(key: WorkKey, tracked: Boolean, now: Long = System.currentTimeMillis()) =
-        dao.setTracked(key.sourceId.value, key.key, tracked, if (tracked) now else null)
+    /** Suit une œuvre trouvée par la recherche (référence = son dernier chapitre connu). */
+    suspend fun track(info: WorkInfo, now: Long = System.currentTimeMillis()) {
+        val c = info.latestChapter
+        dao.insert(
+            WorkEntity(
+                sourceId = info.key.sourceId.value,
+                workKey = info.key.key,
+                title = info.title,
+                url = info.url,
+                coverUrl = info.coverUrl,
+                tracked = true,
+                trackedAt = now,
+                chapterNumber = c?.number,
+                chapterLabel = c?.label,
+                chapterUrl = c?.url,
+                chapterPublishedAt = c?.publishedAtMillis,
+                chapterEarlyAccess = c?.isEarlyAccess ?: false,
+            )
+        )
+    }
+
+    suspend fun untrack(key: WorkKey) = dao.delete(key.sourceId.value, key.key)
+
+    suspend fun setNotifyEarlyAccess(key: WorkKey, notify: Boolean) =
+        dao.setNotifyEarlyAccess(key.sourceId.value, key.key, notify)
 
     override suspend fun trackedWorks(sourceId: SourceId): List<TrackedWork> =
         dao.tracked(sourceId.value).map { it.toTrackedWork() }
@@ -33,16 +52,6 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
             chapter.publishedAtMillis, chapter.isEarlyAccess, checkedAtMillis,
         )
 
-    private fun WorkInfo.toEntity() = WorkEntity(
-        sourceId = key.sourceId.value,
-        workKey = key.key,
-        title = title,
-        url = url,
-        coverUrl = coverUrl,
-        chapterNumber = latestChapter?.number,
-        chapterLabel = latestChapter?.label,
-        chapterUrl = latestChapter?.url,
-        chapterPublishedAt = latestChapter?.publishedAtMillis,
-        chapterEarlyAccess = latestChapter?.isEarlyAccess ?: false,
-    )
+    override suspend fun setEarlyPending(key: WorkKey, pending: Boolean) =
+        dao.setEarlyPending(key.sourceId.value, key.key, pending)
 }

@@ -1,28 +1,44 @@
 package com.fresko.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-private val Accent = Color(0xFFFF6740)
-private val Violet = Color(0xFF6B4EFF)
+private val BaseType = Typography()
 
+private val FreskoType = Typography(
+    displaySmall = BaseType.displaySmall.copy(fontWeight = FontWeight.Black, letterSpacing = (-1).sp),
+    headlineMedium = BaseType.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
+    headlineSmall = BaseType.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
+    titleLarge = BaseType.titleLarge.copy(fontWeight = FontWeight.Bold),
+    titleMedium = BaseType.titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
+    titleSmall = BaseType.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+    labelLarge = BaseType.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+    labelMedium = BaseType.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+    labelSmall = BaseType.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
+)
+
+private val FreskoShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(32.dp),
+)
+
+/** Thème de marque (pas de couleurs dynamiques : l'identité Fresko prime). */
 @Composable
 fun FreskoTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> darkColorScheme(primary = Violet, secondary = Accent)
-        else -> lightColorScheme(primary = Violet, secondary = Accent)
-    }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(
+        colorScheme = if (isSystemInDarkTheme()) DarkScheme else LightScheme,
+        typography = FreskoType,
+        shapes = FreskoShapes,
+        content = content,
+    )
 }

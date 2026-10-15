@@ -33,8 +33,8 @@ class DemonicSourceTest {
         val first = works.first()
         assertEquals(WorkKey(DemonicSource.ID, "The-Demon-King-Overrun-by-Heroes"), first.key)
         assertEquals("The Demon King Overrun by Heroes", first.title)
-        assertEquals("https://demonicscans.org/manga/The-Demon-King-Overrun-by-Heroes", first.url)
-        val ch = first.latestChapter!!
+        assertEquals(listOf(52.0, 51.0, 50.0), first.recentChapters.map { it.number })
+        val ch = first.recentChapters.first()
         assertEquals(52.0, ch.number!!, 0.0)
         assertEquals("Chapitre 52", ch.label)
         assertEquals("https://demonicscans.org/chaptered.php?manga=14174&chapter=52", ch.url)
@@ -54,6 +54,7 @@ class DemonicSourceTest {
         assertEquals("Solo Max-Level Newbie", results[0].title)
         assertEquals("Solo-Max%25252DLevel-Newbie", results[0].key.key)
         assertNull(results[0].latestChapter)
+        assertEquals("https://readermc.org/images/thumbnails/Solo%20Max-Level%20Newbie.jpg", results[0].coverUrl)
     }
 
     @Test
