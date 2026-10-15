@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Déclenchement manuel : le workflow crée lui-même le tag sur le commit choisi.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version à publier (ex. v0.2.0)"
+        required: true
+
+env:
+  TAG: ${{ inputs.version || github.ref_name }}
 
 permissions:
   contents: write
@@ -42,10 +51,12 @@ jobs:
           FRESKO_KEY_PASSWORD: ${{ secrets.FRESKO_KEY_PASSWORD }}
         run: |
           ./gradlew :app:assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk "fresko-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "fresko-${TAG}.apk"
 
       - uses: softprops/action-gh-release@v2
         with:
-          name: Fresko ${{ github.ref_name }}
-          body_path: .github/release-notes/${{ github.ref_name }}.md
-          files: fresko-${{ github.ref_name }}.apk
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Fresko ${{ env.TAG }}
+          body_path: .github/release-notes/${{ env.TAG }}.md
+          files: fresko-${{ env.TAG }}.apk

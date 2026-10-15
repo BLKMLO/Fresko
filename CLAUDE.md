@@ -112,7 +112,9 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
 - **Release** : `.github/workflows/release.yml` sur tag `v*` → tests, APK, release GitHub
   avec `fresko-vX.Y.Z.apk` et les notes `.github/release-notes/vX.Y.Z.md` (à écrire
   avant de taguer). Procédure : version dans `app/build.gradle.kts` (versionCode +1),
-  notes, commit sur `main`, `git tag vX.Y.Z && git push origin vX.Y.Z`.
+  notes, commit sur `main`, puis lancer le workflow « Release » à la main avec
+  `version = vX.Y.Z` (il crée le tag). Dans l'environnement Claude Code cloud, le
+  proxy git refuse de pousser un tag (403) : déclenchement via l'API GitHub.
 - **Signature** : le dépôt est public, aucune clé n'est versionnée. Si les secrets
   `FRESKO_KEYSTORE_B64`, `FRESKO_KEYSTORE_PASSWORD`, `FRESKO_KEY_ALIAS`, `FRESKO_KEY_PASSWORD`
   existent, la release est signée avec ; sinon clé debug de la CI (différente à chaque
@@ -161,4 +163,5 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
   vérifier, réglages en cartes, nouvelle icône adaptative, transitions de navigation.
 - Captures Robolectric pour valider le rendu (corrigé : badge « Anticipé » qui se
   coupait, dates forcées en français).
-- Release : workflow sur tag, notes dans `.github/release-notes/`.
+- Release : workflow sur tag ou manuel (crée le tag), notes dans `.github/release-notes/`.
+  Push de tag refusé par le proxy (403) → release v0.2.0 lancée par déclenchement manuel.
