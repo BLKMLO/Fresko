@@ -29,7 +29,12 @@ data class WorkEntity(
     @ColumnInfo(name = "last_checked_at") val lastCheckedAt: Long? = null,
     @ColumnInfo(name = "notify_early_access", defaultValue = "1") val notifyEarlyAccess: Boolean = true,
     @ColumnInfo(name = "early_pending", defaultValue = "0") val earlyPending: Boolean = false,
+    /** URL du dernier chapitre marqué comme lu (null = rien de lu). */
+    @ColumnInfo(name = "read_chapter_url") val readChapterUrl: String? = null,
 ) {
+    /** Un chapitre plus récent que le dernier lu est disponible. */
+    val isUnread: Boolean get() = chapterUrl != null && chapterUrl != readChapterUrl
+
     val key: WorkKey get() = WorkKey(SourceId(sourceId), workKey)
 
     val chapter: ChapterInfo?

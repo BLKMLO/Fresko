@@ -7,7 +7,7 @@ jamais sur une autre branche.
 ## Objectif
 
 App Android peu gourmande en batterie qui vérifie toutes les X minutes (10 par
-défaut) si un chapitre d'une œuvre suivie est sorti, sur Asura Scans et Demonic Scans.
+défaut) si un chapitre d'une œuvre suivie est sorti, sur Asura Scans, Demonic Scans et NatoManga.
 Depuis la v0.2.0, **la recherche est le seul moyen de trouver une œuvre** (plus de catalogue).
 
 ## Architecture (Gradle multi-modules)
@@ -15,13 +15,15 @@ Depuis la v0.2.0, **la recherche est le seul moyen de trouver une œuvre** (plus
 ```
 app/                 UI Compose (écran suivis+recherche, fiche œuvre, réglages), thème, câblage (AppContainer), SourceRegistry
 feature/checker/     WorkManager : CheckWorker, CheckScheduler, ChapterNotifier (Android)
-core/data/           Room (œuvres suivies, schéma v2) + DataStore (réglages, curseurs de check) (Android)
+core/data/           Room (œuvres suivies, schéma v3) + DataStore (réglages, curseurs de check) (Android)
 core/domain/         UpdateChecker : logique du check, pure Kotlin, testée
 core/source/         Interface Source + UpdateCursor/RecentUpdates (pure Kotlin)
 core/network/        HttpFetcher (interface) + OkHttpFetcher (pure Kotlin)
 core/model/          Modèles : WorkKey, WorkInfo, ChapterInfo, TrackedWork… (pure Kotlin)
 sources/asura/       Implémentation Asura (API JSON) + tests sur fixtures réelles
 sources/demonic/     Implémentation Demonic (HTML/Jsoup) + tests sur fixtures réelles
+sources/natomanga/   Implémentation NatoManga (recherche HTML + API chapitres JSON) + tests
+tools/icon/          Illustration source de l'icône + scripts de découpage (voir son README)
 ```
 
 Dépendances : `app → feature:checker, core:data, sources:* → core:domain → core:source → core:model, core:network`.
@@ -57,6 +59,12 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    alors vérifiée par requête dédiée à chaque check jusqu'à l'alerte (l'endpoint
    chapitres d'Asura ne renvoie que les chapitres gratuits).
 5. Le curseur (`UpdateCursor` : instant + ancres) n'est enregistré que si tout a été vérifié.
+6. **Statut « lu »** (v0.3.0) : colonne `read_chapter_url` ; une œuvre est « à lire »
+   si `chapter_url ≠ read_chapter_url`. Le premier chapitre connu d'une œuvre
+   (référence au suivi ou initialisation par le check) est considéré comme lu
+   (`CASE WHEN chapter_url IS NULL` dans `WorkDao.updateChapter`, évalué sur l'ancienne valeur).
+7. **Sources désactivées** : rien n'est supprimé ; le check les ignore et l'UI masque
+   leurs œuvres (compteur « masquées » sur l'accueil, « conservées » dans les réglages).
 
 ### Couverture de la période
 
@@ -67,6 +75,10 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
   déjà vue au check précédent est encore là, tout ce qui a bougé depuis est au-dessus.
   Repli sur les dates : couvert si `minuit UTC(jour le plus ancien) + 24 h + 14 h ≤ curseur`.
   Au plus 3 pages.
+- **NatoManga** : jamais couvert (`coversCursor = false`, aucune requête de liste) →
+  une requête API par œuvre suivie à chaque check. La liste `manga-list/latest-manga`
+  (24 œuvres/page, sans date, ≈ 3 910 pages le 2026-10-16) bouge trop pour couvrir
+  10 min et pèse 22 003 octets compressés, contre 233 à 254 octets par œuvre via l'API.
 
 ## Endpoints observés (2026-10-15)
 
@@ -80,6 +92,9 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
 | Demonic | (plus utilisé depuis v0.2.0) | `translationlist.php?list=N` (leurs traductions ; 525 œuvres le 2026-10-15) |
 | Demonic | recherche | `search.php?manga=…` |
 | Demonic | dernier chapitre | `/manga/{slug}` (`#chapters-list li a`) |
+| NatoManga | recherche | `https://www.natomanga.com/search/story/{alias}` (20 `div.story_item`, « Updated : Oct-14-2026 08:11 » en UTC) ; alias = `change_alias` de `/js/fsearch.js` |
+| NatoManga | dernier chapitre | `/api/manga/{slug}/chapters?limit=3` (JSON, `chapter_num`, `chapter_slug`, `updated_at` UTC ; slug inconnu → 400) |
+| NatoManga | URL chapitre | `/manga/{slug}/{chapter_slug}` |
 
 - asuracomic.net → 301 vers asurascans.com.
 - Demonic agrège ≈ 250 pages × 56 œuvres sur `advanced.php` (page 240 pleine, 260 vide).
@@ -87,6 +102,8 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
   activées en parallèle ; résultats en mémoire (seules les œuvres suivies sont en base).
 - La recherche Demonic ne fournit pas de dernier chapitre ; ses URL de vignettes
   contiennent des espaces bruts (encodés en `%20` par le parser).
+- natomanga.com → 301 vers www.natomanga.com ; couvertures (`storage.waitst.com`,
+  `img-r*.2xstorage.com`) accessibles sans Referer (vérifié le 2026-10-16).
 - Asura : 353 séries chargées par l'app lors du test réel du 2026-10-15 (`meta.total` annonçait 354).
 - Chapitres Asura `is_premium` / `early_access_until` : notifiés avec la mention « accès anticipé ».
 
@@ -99,6 +116,10 @@ Taille transférée (gzip, corps seuls, hors en-têtes HTTP/TLS) d'une requête 
 Formule, cas courant (une page par source, les deux sources ont des œuvres suivies) :
 `octets/jour = (1440 / intervalle_min) × (18 965 + 15 919)` → à 10 min : 144 × 34 884 = 5 023 296 octets ≈ 5,0 Mo/jour.
 Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon le contenu des pages.
+
+NatoManga (mesuré le 2026-10-16) : 233 à 254 octets compressés par œuvre suivie et par check,
+soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (borne haute mesurée)
+→ à 10 min avec 10 œuvres : 144 × 10 × 254 = 365 760 octets ≈ 0,37 Mo/jour.
 
 ## Build
 
@@ -118,7 +139,12 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
 - **Signature** : le dépôt est public, aucune clé n'est versionnée. Si les secrets
   `FRESKO_KEYSTORE_B64`, `FRESKO_KEYSTORE_PASSWORD`, `FRESKO_KEY_ALIAS`, `FRESKO_KEY_PASSWORD`
   existent, la release est signée avec ; sinon clé debug de la CI (différente à chaque
-  run → mise à jour impossible par-dessus, il faut désinstaller).
+  run → mise à jour impossible par-dessus, il faut désinstaller). Procédure utilisateur
+  dans le README. Le 2026-10-16, une clé a été générée pour l'utilisateur (PKCS12, RSA 4096,
+  alias `fresko`, CN=Fresko, SHA-256 du certificat
+  `F4:81:33:2A:BD:A1:0B:F9:F6:0B:6A:65:8F:4F:4F:C6:63:10:A0:39:39:2E:06:4F:CF:C7:50:45:2F:0C:73:3E`)
+  et vérifiée par une signature locale ; elle n'est **pas** dans le dépôt. Relancer le
+  workflow Release sur une version existante remplace l'APK de la release.
 - **Captures d'écran** (pas d'appareil ici) : `./gradlew :app:testDebugUnitTest -Pscreenshots`
   → `app/build/screenshots/*.png` (Robolectric, rendu natif, données d'exemple, sans
   couvertures). Test `app/src/test/.../screenshots/ScreenshotTest.kt`, exclu par défaut.
@@ -129,11 +155,13 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
 - Pas d'émulateur dans l'environnement de dev (pas de KVM) : UI et WorkManager
   **non testés sur appareil** à ce jour. Testés : parsers (fixtures réelles), logique
   de check (unitaires), appels réels aux deux sites (test de fumée JVM, non versionné),
-  rendu des écrans (captures Robolectric), migration Room 1→2 (rejouée sur SQLite).
+  rendu des écrans (captures Robolectric), migrations Room 1→2 et 2→3 (rejouées sur SQLite).
 - Le scraping dépend de la structure des sites : si un site change, seuls les
   fichiers de `sources/<site>/` sont à adapter (fixtures de test à recapturer).
+- Toucher une notification ouvre le chapitre mais ne le marque pas comme lu.
 - Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
-  des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic.
+  des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic,
+  marquer lu depuis la notification.
 
 ## Journal
 
@@ -165,3 +193,20 @@ Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon l
   coupait, dates forcées en français).
 - Release : workflow sur tag ou manuel (crée le tag), notes dans `.github/release-notes/`.
   Push de tag refusé par le proxy (403) → release v0.2.0 lancée par déclenchement manuel.
+
+### 2026-10-16 — Session 3 : v0.3.0
+- Demandes : marquer une œuvre comme lue ; source NatoManga ; nouvelle icône (image
+  fournie) ; sources désactivables sans perdre les œuvres ; procédure de clé sans
+  logiciel ; release v0.3.0.
+- Statut « lu » : Room v3 (`read_chapter_url`, migration : déjà connu = lu, rejouée
+  sur SQLite), sections « À lire » / « À jour », bouton ✓, « Marquer lu / non lu »
+  dans la fiche, lecture = lu.
+- NatoManga : module `sources/natomanga` (5 tests sur fixtures réelles), check par
+  requête API dédiée par œuvre ; chaîne recherche → dernier chapitre → détection
+  validée en réel. Couleur de source : ambre.
+- Icône : détourage de l'illustration (`tools/icon/`), premier plan WebP par densité,
+  fond vectoriel, monochrome ; illustration réutilisée dans l'état vide.
+- Sources désactivées : déjà conservées depuis la v0.1 ; ajout des compteurs
+  (« N œuvres conservées », « N œuvres masquées »).
+- Clé de signature générée pour l'utilisateur (hors dépôt), signature vérifiée localement
+  avec `apksigner` ; procédure web dans le README.

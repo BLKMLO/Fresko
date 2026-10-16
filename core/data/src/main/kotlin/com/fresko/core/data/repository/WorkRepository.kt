@@ -9,6 +9,7 @@ import com.fresko.core.model.TrackedWork
 import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /** Point d'accès unique aux œuvres suivies pour l'UI et le check. */
 class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
@@ -34,9 +35,18 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
                 chapterUrl = c?.url,
                 chapterPublishedAt = c?.publishedAtMillis,
                 chapterEarlyAccess = c?.isEarlyAccess ?: false,
+                readChapterUrl = c?.url, // ce qui est déjà sorti au moment du suivi est « lu »
             )
         )
     }
+
+    suspend fun markRead(key: WorkKey) = dao.markRead(key.sourceId.value, key.key)
+
+    suspend fun markUnread(key: WorkKey) = dao.markUnread(key.sourceId.value, key.key)
+
+    /** Nombre d'œuvres suivies par source (y compris sources désactivées). */
+    fun observeCountsBySource(): Flow<Map<SourceId, Int>> =
+        dao.observeTracked().map { list -> list.groupingBy { SourceId(it.sourceId) }.eachCount() }
 
     suspend fun untrack(key: WorkKey) = dao.delete(key.sourceId.value, key.key)
 

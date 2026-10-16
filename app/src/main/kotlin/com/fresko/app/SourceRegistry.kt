@@ -5,6 +5,7 @@ import com.fresko.core.network.HttpFetcher
 import com.fresko.core.source.Source
 import com.fresko.sources.asura.AsuraSource
 import com.fresko.sources.demonic.DemonicSource
+import com.fresko.sources.natomanga.NatoMangaSource
 
 /**
  * Liste des sites supportés. Pour ajouter un site : créer le module
@@ -15,6 +16,7 @@ class SourceRegistry(http: HttpFetcher) {
     val all: List<Source> = listOf(
         AsuraSource(http),
         DemonicSource(http),
+        NatoMangaSource(http),
     )
 
     private val byId = all.associateBy { it.id }

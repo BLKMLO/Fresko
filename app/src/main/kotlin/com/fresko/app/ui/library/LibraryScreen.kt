@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -56,6 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.fresko.app.R
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -67,7 +69,6 @@ import com.fresko.app.ui.components.Cover
 import com.fresko.app.ui.components.EarlyAccessBadge
 import com.fresko.app.ui.components.Placeholder
 import com.fresko.app.ui.components.SourceBadge
-import com.fresko.app.ui.components.isFresh
 import com.fresko.app.ui.components.relativeTime
 import com.fresko.app.ui.components.shortChapter
 import com.fresko.app.ui.theme.FreskoColors
@@ -86,6 +87,8 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
             onTrack = viewModel::track,
             onUntrack = viewModel::untrack,
             onToggleEarly = viewModel::setNotifyEarlyAccess,
+            onMarkRead = viewModel::markRead,
+            onMarkUnread = viewModel::markUnread,
             onOpenSettings = onOpenSettings,
         ),
     )
@@ -99,6 +102,8 @@ class LibraryActions(
     val onTrack: (WorkInfo) -> Unit = {},
     val onUntrack: (WorkKey) -> Unit = {},
     val onToggleEarly: (WorkKey, Boolean) -> Unit = { _, _ -> },
+    val onMarkRead: (WorkKey) -> Unit = {},
+    val onMarkUnread: (WorkKey) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
 )
 
@@ -135,11 +140,37 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                 } else if (state.tracked.isEmpty()) {
                     item(key = "empty") { EmptyState(state.enabledSources.map { it.name }) }
                 } else {
-                    item(key = "title_tracked") {
-                        SectionTitle("Vos lectures", state.tracked.size.toString(), Modifier.animateItem())
+                    val toRead = state.toRead
+                    val upToDate = state.upToDate
+                    if (toRead.isNotEmpty()) {
+                        item(key = "title_toread") {
+                            SectionTitle("À lire", toRead.size.toString(), Modifier.animateItem())
+                        }
+                        items(toRead, key = { "t:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
+                            TrackedCard(
+                                item,
+                                onClick = { selectedKey = item.entity.key },
+                                onMarkRead = { actions.onMarkRead(item.entity.key) },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
                     }
-                    items(state.tracked, key = { "t:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-                        TrackedCard(item, onClick = { selectedKey = item.entity.key }, modifier = Modifier.animateItem())
+                    if (upToDate.isNotEmpty()) {
+                        item(key = "title_uptodate") {
+                            SectionTitle("À jour", upToDate.size.toString(), Modifier.animateItem())
+                        }
+                        items(upToDate, key = { "t:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
+                            TrackedCard(item, onClick = { selectedKey = item.entity.key }, modifier = Modifier.animateItem())
+                        }
+                    }
+                }
+                if (!state.isSearching && state.hiddenCount > 0) {
+                    item(key = "hidden") {
+                        Hint(
+                            "${state.hiddenCount} œuvre${if (state.hiddenCount > 1) "s" else ""} masquée" +
+                                "${if (state.hiddenCount > 1) "s" else ""} : source désactivée dans les réglages " +
+                                "(rien n'est supprimé).",
+                        )
                     }
                 }
             }
@@ -152,6 +183,8 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
             onDismiss = { selectedKey = null },
             onOpen = open,
             onToggleEarly = { actions.onToggleEarly(selected.entity.key, it) },
+            onMarkRead = { actions.onMarkRead(selected.entity.key) },
+            onMarkUnread = { actions.onMarkUnread(selected.entity.key) },
             onUntrack = {
                 actions.onUntrack(selected.entity.key)
                 selectedKey = null
@@ -168,7 +201,12 @@ private fun LazyListScope.searchResults(
     if (state.matchingTracked.isNotEmpty()) {
         item(key = "title_matching") { SectionTitle("Dans vos lectures", state.matchingTracked.size.toString()) }
         items(state.matchingTracked, key = { "m:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-            TrackedCard(item, onClick = { onSelect(item.entity.key) }, modifier = Modifier.animateItem())
+            TrackedCard(
+                item,
+                onClick = { onSelect(item.entity.key) },
+                onMarkRead = { actions.onMarkRead(item.entity.key) }.takeIf { item.entity.isUnread },
+                modifier = Modifier.animateItem(),
+            )
         }
     }
     for (section in state.search) {
@@ -220,12 +258,13 @@ private fun Header(state: LibraryUiState, onOpenSettings: () -> Unit) {
                 style = MaterialTheme.typography.displaySmall.merge(TextStyle(brush = FreskoColors.Brand)),
             )
             val n = state.tracked.size
-            val subtitle = when {
+            val unread = state.toRead.size
+            val main = when {
                 n == 0 -> "Vos alertes de nouveaux chapitres"
-                state.lastCheck != null ->
-                    "$n œuvre${if (n > 1) "s" else ""} suivie${if (n > 1) "s" else ""} · vérifié ${relativeTime(state.lastCheck)}"
-                else -> "$n œuvre${if (n > 1) "s" else ""} suivie${if (n > 1) "s" else ""}"
+                unread == 0 -> "Tout est lu"
+                else -> "$unread à lire sur $n œuvre${if (n > 1) "s" else ""}"
             }
+            val subtitle = if (n > 0 && state.lastCheck != null) "$main · vérifié ${relativeTime(state.lastCheck)}" else main
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FilledTonalIconButton(onClick = onOpenSettings) {
@@ -285,7 +324,12 @@ private fun SectionTitle(title: String, count: String?, modifier: Modifier = Mod
 }
 
 @Composable
-private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TrackedCard(
+    item: TrackedItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onMarkRead: (() -> Unit)? = null,
+) {
     val e = item.entity
     Surface(
         onClick = onClick,
@@ -298,8 +342,7 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
             Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SourceBadge(item.source.id, item.source.name)
-                    val published = e.chapterPublishedAt
-                    if (published != null && isFresh(published)) {
+                    if (e.isUnread) {
                         Spacer(Modifier.width(6.dp))
                         NewBadge()
                     }
@@ -340,6 +383,11 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+            if (onMarkRead != null) {
+                FilledTonalIconButton(onClick = onMarkRead) {
+                    Icon(Icons.Filled.Check, contentDescription = "Marquer comme lu")
                 }
             }
         }
@@ -439,16 +487,19 @@ private fun EmptyState(sourceNames: List<String>) {
         Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 56.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier.size(104.dp).clip(CircleShape).background(FreskoColors.Brand),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Notifications, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
-        }
-        Spacer(Modifier.height(24.dp))
+        Image(
+            painter = painterResource(R.drawable.fresko_mascot),
+            contentDescription = null,
+            modifier = Modifier.size(180.dp),
+        )
+        Spacer(Modifier.height(16.dp))
         Text("Ne ratez plus un chapitre", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
-        val where = if (sourceNames.isEmpty()) "vos sources" else sourceNames.joinToString(" et ")
+        val where = when (sourceNames.size) {
+            0 -> "vos sources"
+            1 -> sourceNames[0]
+            else -> sourceNames.dropLast(1).joinToString(", ") + " et " + sourceNames.last()
+        }
         Text(
             "Recherchez une œuvre sur $where, puis touchez « Suivre ». " +
                 "Fresko vous prévient à chaque nouvelle sortie.",

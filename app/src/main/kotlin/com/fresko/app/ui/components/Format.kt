@@ -40,7 +40,3 @@ fun shortChapter(number: Double?, fallback: String?): String = when {
     number % 1.0 == 0.0 -> "Ch. ${number.toLong()}"
     else -> "Ch. $number"
 }
-
-/** Chapitre sorti dans les dernières 24 h (ou aujourd'hui pour une date au jour près). */
-fun isFresh(millis: Long, now: Long = System.currentTimeMillis()): Boolean =
-    if (millis % DAY == 0L) now / DAY == millis / DAY else now - millis < DAY

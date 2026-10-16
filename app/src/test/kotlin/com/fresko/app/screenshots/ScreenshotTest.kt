@@ -45,24 +45,27 @@ class ScreenshotTest {
     private val now = System.currentTimeMillis()
     private val asura = SourceUi(SourceId("asura"), "Asura Scans", hasEarlyAccess = true)
     private val demonic = SourceUi(SourceId("demonic"), "Demonic Scans", hasEarlyAccess = false)
+    private val nato = SourceUi(SourceId("natomanga"), "NatoManga", hasEarlyAccess = false)
 
-    private fun work(src: SourceUi, key: String, title: String, ch: Double, agoMin: Long, early: Boolean = false, notifyEarly: Boolean = true) =
+    private fun work(src: SourceUi, key: String, title: String, ch: Double, agoMin: Long, early: Boolean = false, notifyEarly: Boolean = true, read: Boolean = false) =
         TrackedItem(
             WorkEntity(
                 sourceId = src.id.value, workKey = key, title = title, url = "https://x/$key", coverUrl = null,
                 tracked = true, trackedAt = now - 20 * 24 * 3600_000L,
                 chapterNumber = ch, chapterLabel = "Chapitre ${ch.toInt()}", chapterUrl = "https://x/$key/$ch",
                 chapterPublishedAt = now - agoMin * 60_000, chapterEarlyAccess = early, notifyEarlyAccess = notifyEarly,
+                readChapterUrl = if (read) "https://x/$key/$ch" else null,
             ),
             src,
         )
 
     private val tracked = listOf(
         work(asura, "solo", "Solo Max-Level Newbie", 281.0, 38, early = true),
-        work(demonic, "demon", "The Demon King Overrun by Heroes", 52.0, 95),
-        work(asura, "sword", "Sword of the Undying", 31.0, 300, early = true, notifyEarly = false),
-        work(demonic, "max", "Max Level Player", 158.0, 26 * 60),
-        work(asura, "raising", "Raising Villains the Right Way", 56.0, 4 * 24 * 60),
+        work(nato, "taming", "The Taming", 39.0, 70),
+        work(demonic, "demon", "The Demon King Overrun by Heroes", 52.0, 95, read = true),
+        work(asura, "sword", "Sword of the Undying", 30.0, 300, notifyEarly = false, read = true),
+        work(demonic, "max", "Max Level Player", 158.0, 26 * 60, read = true),
+        work(asura, "raising", "Raising Villains the Right Way", 56.0, 4 * 24 * 60, read = true),
     )
 
     private fun shot(name: String, dark: Boolean, multipleRoots: Boolean = false, content: @androidx.compose.runtime.Composable () -> Unit) {
@@ -99,15 +102,15 @@ class ScreenshotTest {
     }.getOrDefault(emptyList())
 
     @Test fun libraryDark() = shot("1-library", dark = true) {
-        LibraryContent(LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic), lastCheck = now - 4 * 60_000), LibraryActions())
+        LibraryContent(LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic, nato), lastCheck = now - 4 * 60_000), LibraryActions())
     }
 
     @Test fun libraryLight() = shot("1-library", dark = false) {
-        LibraryContent(LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic), lastCheck = now - 4 * 60_000), LibraryActions())
+        LibraryContent(LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic, nato), lastCheck = now - 4 * 60_000), LibraryActions())
     }
 
     @Test fun emptyDark() = shot("2-empty", dark = true) {
-        LibraryContent(LibraryUiState(enabledSources = listOf(asura, demonic)), LibraryActions())
+        LibraryContent(LibraryUiState(enabledSources = listOf(asura, demonic, nato)), LibraryActions())
     }
 
     private fun info(src: SourceUi, key: String, title: String, ch: Double?, agoMin: Long = 60, early: Boolean = false) = WorkInfo(
@@ -119,7 +122,7 @@ class ScreenshotTest {
         tracked = tracked,
         query = "solo",
         matchingTracked = tracked.take(1),
-        enabledSources = listOf(asura, demonic),
+        enabledSources = listOf(asura, demonic, nato),
         search = listOf(
             SourceSearch(
                 asura, loading = false, failed = false,
@@ -139,7 +142,7 @@ class ScreenshotTest {
 
     @Test fun sheetDark() = shot("4-sheet", dark = true, multipleRoots = true) {
         LibraryContent(
-            LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic), lastCheck = now),
+            LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic, nato), lastCheck = now),
             LibraryActions(),
             initialSelection = tracked[0].entity.key,
         )
@@ -147,8 +150,9 @@ class ScreenshotTest {
 
     private val settingsState = SettingsUiState(
         sources = listOf(
-            SourceSetting(asura.id, asura.name, true, now - 4 * 60_000),
-            SourceSetting(demonic.id, demonic.name, true, now - 9 * 60_000),
+            SourceSetting(asura.id, asura.name, true, now - 4 * 60_000, 3),
+            SourceSetting(demonic.id, demonic.name, false, now - 9 * 60_000, 2),
+            SourceSetting(nato.id, nato.name, true, now - 4 * 60_000, 1),
         ),
         intervalMinutes = 10,
     )

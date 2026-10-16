@@ -99,7 +99,10 @@ fun SettingsContent(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SettingsCard("Sources", "Sites interrogés lors des vérifications et des recherches") {
+            SettingsCard(
+                "Sources",
+                "Une source désactivée n'est plus vérifiée ni affichée ; ses œuvres suivies sont conservées.",
+            ) {
                 state.sources.forEachIndexed { index, s ->
                     if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Row(
@@ -115,8 +118,13 @@ fun SettingsContent(
                         }
                         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                             Text(s.name, style = MaterialTheme.typography.titleMedium)
+                            val works = "${s.trackedCount} œuvre${if (s.trackedCount > 1) "s" else ""}"
                             Text(
-                                s.lastSuccess?.let { "Vérifiée " + relativeTime(it) } ?: "Pas encore vérifiée",
+                                when {
+                                    !s.enabled -> "Désactivée · $works conservée${if (s.trackedCount > 1) "s" else ""}"
+                                    s.lastSuccess != null -> "$works · vérifiée ${relativeTime(s.lastSuccess)}"
+                                    else -> "$works · pas encore vérifiée"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -46,6 +48,8 @@ fun WorkSheet(
     onDismiss: () -> Unit,
     onOpen: (String) -> Unit,
     onToggleEarly: (Boolean) -> Unit,
+    onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit,
     onUntrack: () -> Unit,
 ) {
     val e = item.entity
@@ -123,7 +127,10 @@ fun WorkSheet(
             }
 
             Button(
-                onClick = { onOpen(e.chapterUrl ?: e.url) },
+                onClick = {
+                    onOpen(e.chapterUrl ?: e.url)
+                    if (e.isUnread) onMarkRead()
+                },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -134,18 +141,28 @@ fun WorkSheet(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (e.chapterUrl != null) {
+                    FilledTonalButton(
+                        onClick = if (e.isUnread) onMarkRead else onMarkUnread,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (e.isUnread) "Marquer lu" else "Marquer non lu", maxLines = 1)
+                    }
+                }
                 OutlinedButton(onClick = { onOpen(e.url) }, modifier = Modifier.weight(1f)) {
-                    Text("Page de l'œuvre")
+                    Text("Page de l'œuvre", maxLines = 1)
                 }
-                TextButton(
-                    onClick = onUntrack,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) {
-                    Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Ne plus suivre")
-                }
+            }
+            TextButton(
+                onClick = onUntrack,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Ne plus suivre")
             }
         }
     }

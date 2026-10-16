@@ -45,8 +45,12 @@ data class LibraryUiState(
     val enabledSources: List<SourceUi> = emptyList(),
     val lastCheck: Long? = null,
     val checking: Boolean = false,
+    /** Œuvres suivies sur des sources désactivées (conservées, mais masquées). */
+    val hiddenCount: Int = 0,
 ) {
     val isSearching: Boolean get() = query.trim().length >= MIN_QUERY
+    val toRead: List<TrackedItem> get() = tracked.filter { it.entity.isUnread }
+    val upToDate: List<TrackedItem> get() = tracked.filterNot { it.entity.isUnread }
 }
 
 private data class Slot(val loading: Boolean, val failed: Boolean, val results: List<WorkInfo>)
@@ -95,6 +99,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             enabledSources = enabled,
             lastCheck = settings.lastSuccessBySource.filterKeys { it in enabledIds }.values.maxOrNull(),
             checking = checking,
+            hiddenCount = works.count { SourceId(it.sourceId) !in enabledIds },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -129,8 +134,17 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             val known = info.latestChapter
             if (known == null || fetched.isNewerThan(known)) {
                 c.works.saveLatestChapter(info.key, fetched, System.currentTimeMillis())
+                c.works.markRead(info.key) // la référence n'est pas une nouveauté
             }
         }
+    }
+
+    fun markRead(key: WorkKey) {
+        viewModelScope.launch { c.works.markRead(key) }
+    }
+
+    fun markUnread(key: WorkKey) {
+        viewModelScope.launch { c.works.markUnread(key) }
     }
 
     fun untrack(key: WorkKey) {

@@ -8,6 +8,7 @@ object SourceStyle {
     private val colors = mapOf(
         "asura" to Color(0xFF8B5CF6),
         "demonic" to Color(0xFFEF4462),
+        "natomanga" to Color(0xFFF59E0B),
     )
 
     fun color(id: SourceId): Color = colors[id.value] ?: Color(0xFF64748B)

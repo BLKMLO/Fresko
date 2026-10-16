@@ -28,8 +28,11 @@ interface WorkDao {
     @Query("DELETE FROM works WHERE source_id = :sourceId AND work_key = :key")
     suspend fun delete(sourceId: String, key: String)
 
+    /** Le tout premier chapitre connu d'une œuvre (référence) est considéré comme lu. */
     @Query(
-        """UPDATE works SET chapter_number = :number, chapter_label = :label, chapter_url = :url,
+        """UPDATE works SET
+           read_chapter_url = CASE WHEN chapter_url IS NULL THEN :url ELSE read_chapter_url END,
+           chapter_number = :number, chapter_label = :label, chapter_url = :url,
            chapter_published_at = :publishedAt, chapter_early_access = :earlyAccess,
            last_checked_at = :checkedAt
            WHERE source_id = :sourceId AND work_key = :key"""
@@ -41,6 +44,12 @@ interface WorkDao {
 
     @Query("UPDATE works SET notify_early_access = :notify, early_pending = 0 WHERE source_id = :sourceId AND work_key = :key")
     suspend fun setNotifyEarlyAccess(sourceId: String, key: String, notify: Boolean)
+
+    @Query("UPDATE works SET read_chapter_url = chapter_url WHERE source_id = :sourceId AND work_key = :key")
+    suspend fun markRead(sourceId: String, key: String)
+
+    @Query("UPDATE works SET read_chapter_url = NULL WHERE source_id = :sourceId AND work_key = :key")
+    suspend fun markUnread(sourceId: String, key: String)
 
     @Query("UPDATE works SET early_pending = :pending WHERE source_id = :sourceId AND work_key = :key")
     suspend fun setEarlyPending(sourceId: String, key: String, pending: Boolean)

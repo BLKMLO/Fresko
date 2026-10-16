@@ -12,8 +12,8 @@ android {
         applicationId = "com.fresko.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     // Signature : clé fournie par la CI (secrets GitHub) si présente, sinon clé debug.
@@ -62,6 +62,7 @@ dependencies {
     implementation(project(":feature:checker"))
     implementation(project(":sources:asura"))
     implementation(project(":sources:demonic"))
+    implementation(project(":sources:natomanga"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.activity.compose)
