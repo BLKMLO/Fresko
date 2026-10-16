@@ -1,20 +1,22 @@
 # Icône Fresko
 
-`source.jpg` : illustration fournie (2026-10-16). Les calques de l'icône adaptative
-en sont tirés par deux scripts (Python 3 + Pillow + NumPy) :
+`source.jpg` : illustration fournie (2026-10-16). **On ne retire que le décor flou
+autour de la tuile (icônes Play Store)** : le fond illustré (bleu, bulles, planches,
+étincelles) fait partie de l'icône. Scripts (Python 3 + Pillow + NumPy) :
 
 ```
-python3 tools/icon/segment.py tools/icon/source.jpg /tmp/icon 3   # détourage
-python3 tools/icon/layers.py /tmp/icon app/src/main/res             # calques par densité
+python3 tools/icon/tile.py tools/icon/source.jpg app/src/main/res 70   # icône + illustration
+python3 tools/icon/segment.py tools/icon/source.jpg /tmp/icon 3        # détourage (monochrome)
+python3 tools/icon/layers.py /tmp/icon app/src/main/res                # puis supprimer les
+#   mipmap-*/ic_launcher_foreground.webp produits : seuls les monochromes servent
 ```
 
-1. `segment.py` repère le cadre cyan, prend l'intérieur, puis remplit le fond depuis
-   les bords en s'arrêtant sur le contour blanc / bleu nuit des dessins (épaissi de
-   3 px pour boucher ses trous) ; ne garde que les grandes composantes (cloche + cartes).
-2. `layers.py` produit `mipmap-*/ic_launcher_foreground.webp` (dessin de 54 dp dans
-   un calque de 108 dp, visible en entier avec un masque rond),
-   `ic_launcher_monochrome.webp` (icônes thématiques Android 13+, contours en creux)
-   et `drawable-nodpi/fresko_mascot.webp` (illustration de l'écran vide).
+1. `tile.py` repère le cadre cyan de la tuile, prend l'intérieur (retrait de 42 px pour
+   sortir de l'arc arrondi du cadre), le place à 70 dp dans le calque de 108 dp
+   (zone visible : 72 dp) avec un débord flouté → `mipmap-*/ic_launcher_background.webp`.
+   Il produit aussi `drawable-nodpi/fresko_mascot.webp` : la tuile entière, cadre
+   lumineux compris, pour l'écran vide de l'app.
+2. `segment.py` + `layers.py` : détourage cloche + planches, utilisé seulement pour
+   `ic_launcher_monochrome.webp` (icônes à thème d'Android 13+).
 
-L'arrière-plan est vectoriel : `app/src/main/res/drawable/ic_launcher_background.xml`
-(dégradé repris de l'illustration + étincelles).
+Le premier plan de l'icône adaptative est transparent (`ic_launcher.xml`).

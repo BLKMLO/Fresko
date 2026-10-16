@@ -12,7 +12,7 @@ Sources supportées : **Asura Scans** (asurascans.com, ex-asuracomic.net),
   une barre de recherche en direct sur les sources activées ; « Suivre » sur un résultat.
 - Fiche d'une œuvre : dernier chapitre, lecture, page de l'œuvre, arrêt du suivi et,
   pour Asura, alertes accès anticipé activables par œuvre.
-- Statut « lu » : sections « À lire » / « À jour », bouton ✓ sur chaque carte.
+- Statut « lu » : sections « À lire » / « À jour » ; « Marquer lu » dans la fiche de l'œuvre.
 - Tirer l'écran vers le bas : vérification immédiate.
 - Réglages : activer/désactiver chaque source, fréquence de vérification
   (10 min par défaut), « Vérifier maintenant ».

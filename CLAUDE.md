@@ -59,7 +59,7 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    alors vérifiée par requête dédiée à chaque check jusqu'à l'alerte (l'endpoint
    chapitres d'Asura ne renvoie que les chapitres gratuits).
 5. Le curseur (`UpdateCursor` : instant + ancres) n'est enregistré que si tout a été vérifié.
-6. **Statut « lu »** (v0.3.0) : colonne `read_chapter_url` ; une œuvre est « à lire »
+6. **Statut « lu »** (v0.3.0, se règle dans la fiche de l'œuvre uniquement) : colonne `read_chapter_url` ; une œuvre est « à lire »
    si `chapter_url ≠ read_chapter_url`. Le premier chapitre connu d'une œuvre
    (référence au suivi ou initialisation par le check) est considéré comme lu
    (`CASE WHEN chapter_url IS NULL` dans `WorkDao.updateChapter`, évalué sur l'ancienne valeur).
@@ -149,6 +149,8 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   → `app/build/screenshots/*.png` (Robolectric, rendu natif, données d'exemple, sans
   couvertures). Test `app/src/test/.../screenshots/ScreenshotTest.kt`, exclu par défaut.
   Les écrans sont sans état (`LibraryContent`, `SettingsContent`) pour cela.
+  Ne pas combiner avec `test` : la variante *release* n'a pas l'activité de test
+  (`ui-test-manifest` en `debugImplementation`) → échec des captures en release.
 
 ## Limites connues / pistes
 
@@ -204,9 +206,15 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 - NatoManga : module `sources/natomanga` (5 tests sur fixtures réelles), check par
   requête API dédiée par œuvre ; chaîne recherche → dernier chapitre → détection
   validée en réel. Couleur de source : ambre.
-- Icône : détourage de l'illustration (`tools/icon/`), premier plan WebP par densité,
-  fond vectoriel, monochrome ; illustration réutilisée dans l'état vide.
+- Icône : 1re version détourée (fond retiré) **refusée par l'utilisateur** : seul le décor
+  flou Play Store devait partir, le fond illustré fait le charme. Version finale :
+  illustration complète en fond (`tools/icon/tile.py`), premier plan transparent,
+  monochrome détouré ; tuile entière (cadre lumineux) dans l'écran vide.
+- Bouton ✓ sur les cartes **retiré à la demande** : marquer lu uniquement depuis la fiche
+  de l'œuvre (« Marquer lu / non lu », ou « Lire le chapitre »).
 - Sources désactivées : déjà conservées depuis la v0.1 ; ajout des compteurs
   (« N œuvres conservées », « N œuvres masquées »).
+- Release v0.3.0 publiée une 1re fois avec l'icône détourée et le bouton ✓, puis
+  reconstruite (même tag) après les deux corrections demandées.
 - Clé de signature générée pour l'utilisateur (hors dépôt), signature vérifiée localement
   avec `apksigner` ; procédure web dans le README.

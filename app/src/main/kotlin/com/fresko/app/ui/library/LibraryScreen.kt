@@ -147,12 +147,7 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                             SectionTitle("À lire", toRead.size.toString(), Modifier.animateItem())
                         }
                         items(toRead, key = { "t:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-                            TrackedCard(
-                                item,
-                                onClick = { selectedKey = item.entity.key },
-                                onMarkRead = { actions.onMarkRead(item.entity.key) },
-                                modifier = Modifier.animateItem(),
-                            )
+                            TrackedCard(item, onClick = { selectedKey = item.entity.key }, modifier = Modifier.animateItem())
                         }
                     }
                     if (upToDate.isNotEmpty()) {
@@ -201,12 +196,7 @@ private fun LazyListScope.searchResults(
     if (state.matchingTracked.isNotEmpty()) {
         item(key = "title_matching") { SectionTitle("Dans vos lectures", state.matchingTracked.size.toString()) }
         items(state.matchingTracked, key = { "m:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-            TrackedCard(
-                item,
-                onClick = { onSelect(item.entity.key) },
-                onMarkRead = { actions.onMarkRead(item.entity.key) }.takeIf { item.entity.isUnread },
-                modifier = Modifier.animateItem(),
-            )
+            TrackedCard(item, onClick = { onSelect(item.entity.key) }, modifier = Modifier.animateItem())
         }
     }
     for (section in state.search) {
@@ -324,12 +314,7 @@ private fun SectionTitle(title: String, count: String?, modifier: Modifier = Mod
 }
 
 @Composable
-private fun TrackedCard(
-    item: TrackedItem,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    onMarkRead: (() -> Unit)? = null,
-) {
+private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val e = item.entity
     Surface(
         onClick = onClick,
@@ -383,11 +368,6 @@ private fun TrackedCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-            }
-            if (onMarkRead != null) {
-                FilledTonalIconButton(onClick = onMarkRead) {
-                    Icon(Icons.Filled.Check, contentDescription = "Marquer comme lu")
                 }
             }
         }
