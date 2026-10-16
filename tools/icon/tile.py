@@ -1,7 +1,9 @@
-"""Icône = l'illustration complète (intérieur de la tuile), sans le décor flou autour."""
+"""Icône = l'illustration complète (intérieur de la tuile), sans le décor flou autour.
+
+Produit mipmap-*/ic_launcher_background.webp (l'écran d'accueil utilise layers.py)."""
 import os, sys
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 
 src, res = sys.argv[1], sys.argv[2]
 ART_DP = float(sys.argv[3]) if len(sys.argv) > 3 else 68
@@ -33,11 +35,3 @@ for name, f in densities.items():
     canvas.paste(tile, ((size - art) // 2, (size - art) // 2))
     os.makedirs(f"{res}/mipmap-{name}", exist_ok=True)
     canvas.save(f"{res}/mipmap-{name}/ic_launcher_background.webp", "WEBP", quality=92, method=6)
-
-# Illustration de l'écran vide : la tuile entière (cadre lumineux compris), coins arrondis
-pad = 6
-tile_full = im.crop((x0 - pad, y0 - pad, x1 + pad, y1 + pad))
-mask = Image.new("L", tile_full.size, 0)
-ImageDraw.Draw(mask).rounded_rectangle((0, 0, *tile_full.size), radius=int(tile_full.size[0] * 0.17), fill=255)
-tile_full.putalpha(mask)
-tile_full.resize((512, 512), Image.LANCZOS).save(f"{res}/drawable-nodpi/fresko_mascot.webp", "WEBP", quality=90, method=6)

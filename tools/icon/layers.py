@@ -24,14 +24,15 @@ for name, f in densities.items():
     size = round(108 * f)
     scale = CONTENT_DP * f / max(art.size)
     w, h = round(art.size[0] * scale), round(art.size[1] * scale)
-    for src_img, fname in ((art, "ic_launcher_foreground"), (mono, "ic_launcher_monochrome")):
+    # Seul le monochrome sert : l'icône couleur est produite par tile.py
+    for src_img, fname in ((mono, "ic_launcher_monochrome"),):
         canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         canvas.paste(src_img.resize((w, h), Image.LANCZOS), ((size - w) // 2, (size - h) // 2))
         import os
         os.makedirs(f"{res}/mipmap-{name}", exist_ok=True)
         canvas.save(f"{res}/mipmap-{name}/{fname}.webp", "WEBP", quality=92, method=6)
 
-# Illustration pour l'état vide de l'app (512 px max)
+# Écran d'accueil vide : illustration détourée, version simplifiée sans fond (512 px max)
 os_ = __import__("os"); os_.makedirs(f"{res}/drawable-nodpi", exist_ok=True)
 s = 512 / max(art.size)
 art.resize((round(art.size[0] * s), round(art.size[1] * s)), Image.LANCZOS).save(

@@ -209,7 +209,7 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 - Icône : 1re version détourée (fond retiré) **refusée par l'utilisateur** : seul le décor
   flou Play Store devait partir, le fond illustré fait le charme. Version finale :
   illustration complète en fond (`tools/icon/tile.py`), premier plan transparent,
-  monochrome détouré ; tuile entière (cadre lumineux) dans l'écran vide.
+  monochrome détouré ; tuile entière (cadre lumineux) dans l'écran vide (remplacée en v0.4.0).
 - Bouton ✓ sur les cartes **retiré à la demande** : marquer lu uniquement depuis la fiche
   de l'œuvre (« Marquer lu / non lu », ou « Lire le chapitre »).
 - Sources désactivées : déjà conservées depuis la v0.1 ; ajout des compteurs
@@ -218,3 +218,11 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   reconstruite (même tag) après les deux corrections demandées.
 - Clé de signature générée pour l'utilisateur (hors dépôt), signature vérifiée localement
   avec `apksigner` ; procédure web dans le README.
+
+### 2026-10-16 — Session 4 : v0.4.0
+- Demande : l'icône convient ; l'illustration de l'écran d'accueil (vide) était mieux
+  avant → retour à la version **détourée, sans fond** (cloche + planches).
+- Scripts `tools/icon` réorganisés : `tile.py` = icône couleur seulement ; `layers.py` =
+  monochrome + illustration d'accueil (plus de premier plan généré). Régénération
+  vérifiée : monochrome identique octet pour octet.
+- Release mineure v0.4.0 (versionCode 4), choix laissé à l'assistant (« autonome »).
