@@ -157,6 +157,10 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   `F4:81:33:2A:BD:A1:0B:F9:F6:0B:6A:65:8F:4F:4F:C6:63:10:A0:39:39:2E:06:4F:CF:C7:50:45:2F:0C:73:3E`)
   et vérifiée par une signature locale ; elle n'est **pas** dans le dépôt. Relancer le
   workflow Release sur une version existante remplace l'APK de la release.
+  **2026-10-17 : secrets ajoutés par l'utilisateur, signature vérifiée** (APK de la release
+  « 0.5.0 » signé CN=Fresko, SHA-256 f481…733e). Depuis v0.5.1 le workflow **échoue** sans
+  clé et normalise la version saisie (`0.5.1` → `v0.5.1`). Une release parasite « 0.5.0 »
+  (sans « v », saisie manuelle) existe : sans outil de suppression ici, à supprimer à la main.
 - **Captures d'écran** (pas d'appareil ici) : `./gradlew :app:testDebugUnitTest -Pscreenshots`
   → `app/build/screenshots/*.png` (Robolectric, rendu natif, données d'exemple, sans
   couvertures). Test `app/src/test/.../screenshots/ScreenshotTest.kt`, exclu par défaut.
@@ -261,3 +265,12 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 - 42 tests unitaires distincts. Non testé sur appareil : le sélecteur de fichiers Android
   (SAF) ne fonctionne pas sous Robolectric.
 - Secrets de signature redonnés en clair dans la conversation (non versionnés).
+
+### 2026-10-17 — Session 6 : v0.5.1
+- Constat : l'utilisateur a relancé la release avec « 0.5.0 » (sans « v ») → release et tag
+  séparés « 0.5.0 », APK **bien signé** avec sa clé ; « v0.5.0 » restée signée « Android Debug ».
+  Workflow corrigé : version normalisée, échec si la clé manque.
+- Nouvelle icône fournie (style 3D, fond transparent avec traces bleues floues au-dessus) :
+  `tools/icon/icon3d.py` (détourage, dégradé de fond mesuré, monochrome « trait »).
+  L'illustration de l'accueil vide reste l'ancienne (non demandé).
+- Réponse : les secrets GitHub sont permanents, rien à redonner à l'assistant.

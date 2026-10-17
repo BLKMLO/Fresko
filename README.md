@@ -42,8 +42,10 @@ navigateur (aucun logiciel à installer) :
    **New repository secret**, quatre fois :
    `FRESKO_KEYSTORE_B64` (le Base64), `FRESKO_KEYSTORE_PASSWORD`, `FRESKO_KEY_PASSWORD`
    (le mot de passe, deux fois), `FRESKO_KEY_ALIAS` (`fresko`).
-3. Onglet **Actions** → **Release** → **Run workflow** → version (ex. `v0.3.0`) :
+3. Onglet **Actions** → **Release** → **Run workflow** → version (ex. `v0.5.1` ou `0.5.1`) :
    l'APK de la release est reconstruit et signé avec votre clé.
+   Les secrets sont **permanents** : une fois ajoutés, toutes les releases suivantes sont
+   signées automatiquement. Sans eux, le workflow échoue volontairement.
 4. Désinstaller une dernière fois l'ancienne version, installer la nouvelle. Les
    suivantes s'installeront par-dessus.
 

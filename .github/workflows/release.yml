@@ -10,8 +10,6 @@ on:
         description: "Version à publier (ex. v0.2.0)"
         required: true
 
-env:
-  TAG: ${{ inputs.version || github.ref_name }}
 
 permissions:
   contents: write
@@ -27,19 +25,30 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
 
-      # Clé de signature stable (facultative) : secrets FRESKO_KEYSTORE_B64,
-      # FRESKO_KEYSTORE_PASSWORD, FRESKO_KEY_ALIAS, FRESKO_KEY_PASSWORD.
-      # Sans eux, l'APK est signé avec la clé debug de la CI (change à chaque run).
+      # « 0.5.1 » ou « v0.5.1 » → tag v0.5.1 (une saisie sans « v » créait une release à part)
+      - name: Version
+        env:
+          RAW: ${{ inputs.version || github.ref_name }}
+        run: |
+          V="$(echo "$RAW" | tr -d '[:space:]')"
+          V="v${V#v}"
+          if ! echo "$V" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version invalide : « $RAW » (attendu : 0.5.1 ou v0.5.1)"; exit 1
+          fi
+          echo "TAG=$V" >> "$GITHUB_ENV"
+
+      # Clé de signature : secrets FRESKO_KEYSTORE_B64, FRESKO_KEYSTORE_PASSWORD,
+      # FRESKO_KEY_ALIAS, FRESKO_KEY_PASSWORD. Sans eux la release échoue (un APK signé
+      # avec une clé temporaire ne s'installerait pas par-dessus la version précédente).
       - name: Clé de signature
         env:
           KEYSTORE_B64: ${{ secrets.FRESKO_KEYSTORE_B64 }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fresko.jks"
-            echo "FRESKO_KEYSTORE_FILE=$RUNNER_TEMP/fresko.jks" >> "$GITHUB_ENV"
-          else
-            echo "::warning::Aucune clé de release : APK signé avec la clé debug de la CI."
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Secret FRESKO_KEYSTORE_B64 absent : voir « Clé de signature » dans le README."; exit 1
           fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fresko.jks"
+          echo "FRESKO_KEYSTORE_FILE=$RUNNER_TEMP/fresko.jks" >> "$GITHUB_ENV"
 
       - name: Tests unitaires
         run: ./gradlew test
