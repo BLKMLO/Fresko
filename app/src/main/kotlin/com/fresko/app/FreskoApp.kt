@@ -19,6 +19,8 @@ class FreskoApp : Application(), Configuration.Provider {
         super.onCreate()
         container = AppContainer(this)
         container.notifier.ensureChannel()
+        // Sauvegarde automatique (si un dossier a été choisi) à chaque changement de données
+        container.backup.startAuto(appScope)
         // S'assure qu'un check est planifié (KEEP : ne réinitialise pas le planning existant).
         appScope.launch {
             container.scheduler.schedule(container.settings.current().intervalMinutes, replace = false)

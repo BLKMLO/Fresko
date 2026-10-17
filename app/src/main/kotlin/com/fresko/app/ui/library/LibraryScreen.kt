@@ -5,6 +5,9 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +43,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.fresko.app.R
+import com.fresko.app.ui.settings.BACKUP_MIME_TYPES
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -78,6 +83,10 @@ import com.fresko.core.model.WorkKey
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.restore(uri) { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
     LibraryContent(
         state = state,
         actions = LibraryActions(
@@ -90,6 +99,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
             onMarkRead = viewModel::markRead,
             onMarkUnread = viewModel::markUnread,
             onOpenSettings = onOpenSettings,
+            onRestoreBackup = { restore.launch(BACKUP_MIME_TYPES) },
         ),
     )
 }
@@ -105,6 +115,7 @@ class LibraryActions(
     val onMarkRead: (WorkKey) -> Unit = {},
     val onMarkUnread: (WorkKey) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
+    val onRestoreBackup: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,7 +149,7 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                 if (state.isSearching) {
                     searchResults(state, actions, onSelect = { selectedKey = it })
                 } else if (state.tracked.isEmpty()) {
-                    item(key = "empty") { EmptyState(state.enabledSources.map { it.name }) }
+                    item(key = "empty") { EmptyState(state.enabledSources.map { it.name }, actions.onRestoreBackup) }
                 } else {
                     val toRead = state.toRead
                     val upToDate = state.upToDate
@@ -222,7 +233,9 @@ private fun LazyListScope.searchResults(
         }
         when {
             section.loading && section.results.isEmpty() -> items(3, key = { "ph:$sid:$it" }) { PlaceholderRow() }
-            section.failed -> item(key = "fail:$sid") { Hint("Recherche indisponible pour le moment.") }
+            section.failed -> item(key = "fail:$sid") {
+                Hint("Recherche impossible. " + (section.error ?: "Réessayez plus tard."))
+            }
             section.results.isEmpty() -> item(key = "none:$sid") { Hint("Aucun résultat.") }
             else -> items(section.results, key = { "r:$sid:" + it.info.key.key }) { result ->
                 SearchResultRow(
@@ -462,7 +475,7 @@ private fun Hint(text: String) {
 }
 
 @Composable
-private fun EmptyState(sourceNames: List<String>) {
+private fun EmptyState(sourceNames: List<String>, onRestoreBackup: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 56.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -487,6 +500,8 @@ private fun EmptyState(sourceNames: List<String>) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(20.dp))
+        OutlinedButton(onClick = onRestoreBackup) { Text("Restaurer une sauvegarde") }
         if (sourceNames.isEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(

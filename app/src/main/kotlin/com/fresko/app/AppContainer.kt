@@ -1,6 +1,7 @@
 package com.fresko.app
 
 import android.content.Context
+import com.fresko.app.backup.BackupController
 import com.fresko.core.data.DataModule
 import com.fresko.core.data.settings.SettingsRepository
 import com.fresko.core.domain.UpdateChecker
@@ -28,6 +29,10 @@ class AppContainer(context: Context) {
             works = works,
             state = settings,
         )
+    }
+
+    val backup by lazy {
+        BackupController(appContext, works, settings, { scheduler }, sources.all.map { it.id })
     }
 
     fun checkerDependencies() = CheckerDependencies(

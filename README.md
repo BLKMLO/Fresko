@@ -14,6 +14,8 @@ Sources supportées : **Asura Scans** (asurascans.com, ex-asuracomic.net),
   pour Asura, alertes accès anticipé activables par œuvre.
 - Statut « lu » : sections « À lire » / « À jour » ; « Marquer lu » dans la fiche de l'œuvre.
 - Tirer l'écran vers le bas : vérification immédiate.
+- Sauvegarde dans un fichier hors de l'app (Réglages → Sauvegarde), mise à jour
+  automatiquement : réinstaller Fresko puis rechoisir le dossier restaure tout.
 - Réglages : activer/désactiver chaque source, fréquence de vérification
   (10 min par défaut), « Vérifier maintenant ».
 - Notification par nouveau chapitre ; un appui ouvre le chapitre dans le navigateur.

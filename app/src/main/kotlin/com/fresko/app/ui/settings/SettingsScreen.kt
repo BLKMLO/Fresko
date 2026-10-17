@@ -2,6 +2,8 @@ package com.fresko.app.ui.settings
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,18 +55,48 @@ import com.fresko.app.ui.components.SourceStyle
 import com.fresko.app.ui.components.relativeTime
 import com.fresko.app.ui.theme.FreskoColors
 import com.fresko.core.model.SourceId
+import java.util.Date
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let(viewModel::chooseBackupFolder)
+    }
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let(viewModel::exportTo)
+    }
+    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::importFrom)
+    }
     SettingsContent(
         state = state,
         onBack = onBack,
         onToggleSource = { id, enabled -> viewModel.setSourceEnabled(id, enabled) },
         onInterval = { viewModel.setInterval(it) },
         onCheckNow = viewModel::checkNow,
+        backupActions = BackupActions(
+            onChooseFolder = { pickFolder.launch(null) },
+            onStopAuto = viewModel::stopAutoBackup,
+            onExport = { export.launch(exportFileName()) },
+            onImport = { import.launch(BACKUP_MIME_TYPES) },
+        ),
     )
 }
+
+/** Actions de la carte « Sauvegarde » (lanceurs du sélecteur de fichiers Android). */
+class BackupActions(
+    val onChooseFolder: () -> Unit = {},
+    val onStopAuto: () -> Unit = {},
+    val onExport: () -> Unit = {},
+    val onImport: () -> Unit = {},
+)
+
+/** Types acceptés à l'import : certains gestionnaires de fichiers étiquettent mal le JSON. */
+val BACKUP_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")
+
+private fun exportFileName(): String =
+    "fresko-sauvegarde-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.FRANCE).format(Date()) + ".json"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -74,6 +106,7 @@ fun SettingsContent(
     onToggleSource: (SourceId, Boolean) -> Unit = { _, _ -> },
     onInterval: (Int) -> Unit = {},
     onCheckNow: () -> Unit = {},
+    backupActions: BackupActions = BackupActions(),
 ) {
     val context = LocalContext.current
 
@@ -180,6 +213,8 @@ fun SettingsContent(
                 ) { Text("Optimisation de la batterie") }
             }
 
+            BackupCard(state.backup, backupActions)
+
             Column(
                 Modifier.fillMaxWidth().padding(vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -195,6 +230,64 @@ fun SettingsContent(
                     textAlign = TextAlign.Center,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun BackupCard(backup: BackupUi, actions: BackupActions) {
+    SettingsCard(
+        "Sauvegarde",
+        "Un fichier hors de l'application : vos œuvres et réglages survivent à une désinstallation.",
+    ) {
+        Text("Sauvegarde automatique", style = MaterialTheme.typography.titleMedium)
+        Text(
+            when {
+                backup.folder == null ->
+                    "Désactivée. Choisissez un dossier (par ex. créez « Documents/Fresko ») : " +
+                        "le fichier y sera mis à jour à chaque changement."
+                backup.lastBackupAt != null ->
+                    "Dossier « ${backup.folder} » · dernière sauvegarde ${relativeTime(backup.lastBackupAt)}"
+                else -> "Dossier « ${backup.folder} »"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        backup.error?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = actions.onChooseFolder, enabled = !backup.busy, modifier = Modifier.weight(1f)) {
+                Text(if (backup.folder == null) "Choisir le dossier" else "Changer", maxLines = 1)
+            }
+            if (backup.folder != null) {
+                OutlinedButton(onClick = actions.onStopAuto, enabled = !backup.busy, modifier = Modifier.weight(1f)) {
+                    Text("Arrêter", maxLines = 1)
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = actions.onExport, enabled = !backup.busy, modifier = Modifier.weight(1f)) {
+                Text("Exporter", maxLines = 1)
+            }
+            OutlinedButton(onClick = actions.onImport, enabled = !backup.busy, modifier = Modifier.weight(1f)) {
+                Text("Restaurer", maxLines = 1)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Après une réinstallation : rechoisissez le même dossier (la sauvegarde est retrouvée " +
+                "et restaurée automatiquement), ou touchez « Restaurer » et ouvrez le fichier.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        backup.message?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }

@@ -8,6 +8,7 @@ import com.fresko.core.model.SourceId
 import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import com.fresko.core.model.isNewerThan
+import com.fresko.core.network.HttpException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.coroutineScope
@@ -34,6 +35,8 @@ data class SourceSearch(
     val loading: Boolean,
     val failed: Boolean,
     val results: List<SearchResultItem>,
+    /** Cause lisible de l'échec (ex. site qui bloque la requête). */
+    val error: String? = null,
 )
 
 data class LibraryUiState(
@@ -53,7 +56,12 @@ data class LibraryUiState(
     val upToDate: List<TrackedItem> get() = tracked.filterNot { it.entity.isUnread }
 }
 
-private data class Slot(val loading: Boolean, val failed: Boolean, val results: List<WorkInfo>)
+private data class Slot(
+    val loading: Boolean,
+    val failed: Boolean,
+    val results: List<WorkInfo>,
+    val error: String? = null,
+)
 
 private const val MIN_QUERY = 2
 
@@ -93,6 +101,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
                     source = s,
                     loading = slot?.loading ?: true,
                     failed = slot?.failed ?: false,
+                    error = slot?.error,
                     results = slot?.results.orEmpty().map { SearchResultItem(it, it.key in trackedKeys) },
                 )
             } else emptyList(),
@@ -147,6 +156,21 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
         viewModelScope.launch { c.works.markUnread(key) }
     }
 
+    /** Restauration depuis l'accueil vide (après réinstallation). */
+    fun restore(uri: android.net.Uri, onDone: (String) -> Unit) {
+        viewModelScope.launch {
+            val message = try {
+                val n = c.backup.importFrom(uri)
+                "Sauvegarde restaurée : $n œuvre${if (n > 1) "s" else ""}."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.message ?: "Restauration impossible."
+            }
+            onDone(message)
+        }
+    }
+
     fun untrack(key: WorkKey) {
         viewModelScope.launch { c.works.untrack(key) }
     }
@@ -165,11 +189,23 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
                     Slot(loading = false, failed = false, results = source.search(q))
                 } catch (e: CancellationException) {
                     throw e
-                } catch (_: Exception) {
-                    Slot(loading = false, failed = true, results = emptyList())
+                } catch (e: Exception) {
+                    Slot(loading = false, failed = true, results = emptyList(), error = describeError(e))
                 }
                 slots.update { it + (source.id to slot) }
             }
         }
     }
+}
+
+/** Message compréhensible pour un échec de requête vers un site. */
+internal fun describeError(e: Throwable): String = when (e) {
+    is HttpException -> when (e.code) {
+        403, 429, 503 -> "Le site bloque la requête (protection anti-robot, code ${e.code})."
+        else -> "Le site a répondu une erreur (code ${e.code})."
+    }
+    is java.net.UnknownHostException -> "Site injoignable (pas de réseau ou nom introuvable)."
+    is java.net.SocketTimeoutException -> "Le site ne répond pas (délai dépassé)."
+    is java.io.IOException -> "Problème réseau : ${e.message ?: e::class.simpleName}."
+    else -> "Réponse inattendue du site : ${e.message ?: e::class.simpleName}."
 }

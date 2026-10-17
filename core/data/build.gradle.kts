@@ -29,4 +29,5 @@ dependencies {
     ksp(libs.room.compiler)
     api(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+    testImplementation(libs.junit)
 }

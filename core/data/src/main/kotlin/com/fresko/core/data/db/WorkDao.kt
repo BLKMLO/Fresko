@@ -25,6 +25,12 @@ interface WorkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: WorkEntity)
 
+    @Query("SELECT * FROM works WHERE tracked = 1 ORDER BY title COLLATE NOCASE")
+    suspend fun allTracked(): List<WorkEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entities: List<WorkEntity>)
+
     @Query("DELETE FROM works WHERE source_id = :sourceId AND work_key = :key")
     suspend fun delete(sourceId: String, key: String)
 

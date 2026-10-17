@@ -48,6 +48,12 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
     fun observeCountsBySource(): Flow<Map<SourceId, Int>> =
         dao.observeTracked().map { list -> list.groupingBy { SourceId(it.sourceId) }.eachCount() }
 
+    /** Toutes les œuvres suivies (pour la sauvegarde). */
+    suspend fun snapshot(): List<WorkEntity> = dao.allTracked()
+
+    /** Restauration : ajoute ou remplace les œuvres (celles déjà présentes sont écrasées). */
+    suspend fun restore(entities: List<WorkEntity>) = dao.insertAll(entities)
+
     suspend fun untrack(key: WorkKey) = dao.delete(key.sourceId.value, key.key)
 
     suspend fun setNotifyEarlyAccess(key: WorkKey, notify: Boolean) =

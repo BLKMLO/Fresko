@@ -155,9 +155,15 @@ class ScreenshotTest {
             SourceSetting(nato.id, nato.name, true, now - 4 * 60_000, 1),
         ),
         intervalMinutes = 10,
+        backup = com.fresko.app.ui.settings.BackupUi(folder = "Documents/Fresko", lastBackupAt = now - 2 * 60_000),
     )
 
     @Test fun settingsDark() = shot("5-settings", dark = true) { SettingsContent(settingsState) }
 
     @Test fun settingsLight() = shot("5-settings", dark = false) { SettingsContent(settingsState) }
+
+    @Config(qualifiers = "w400dp-h1900dp-xhdpi")
+    @Test fun settingsFullDark() = shot("6-settings-full", dark = true) {
+        SettingsContent(settingsState.copy(backup = settingsState.backup.copy(message = "Copie exportée : 6 œuvres.")))
+    }
 }

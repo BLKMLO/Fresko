@@ -65,6 +65,18 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    (`CASE WHEN chapter_url IS NULL` dans `WorkDao.updateChapter`, évalué sur l'ancienne valeur).
 7. **Sources désactivées** : rien n'est supprimé ; le check les ignore et l'UI masque
    leurs œuvres (compteur « masquées » sur l'accueil, « conservées » dans les réglages).
+   Depuis la v0.5.0, DataStore mémorise les sources **désactivées** (`disabled_sources`) ;
+   l'ancienne clé `enabled_sources` est reprise par `SourceSelection` (seules asura et
+   demonic pouvaient y être désactivées) puis supprimée. Bug corrigé : une source ajoutée
+   après un premier réglage restait désactivée (NatoManga « absente » de la recherche).
+8. **Sauvegarde** (v0.5.0) : `BackupController` (app) écrit `fresko-sauvegarde.json`
+   (format `BackupFile` v1 dans `core/domain/backup`, JSON lisible) dans un dossier choisi
+   via le sélecteur Android (accès persistant), à chaque changement (anti-rebond 3 s,
+   pas d'écriture si contenu identique). Choisir un dossier contenant déjà une sauvegarde
+   alors que l'app ne suit rien la restaure. Restauration manuelle : Réglages ou accueil
+   vide. Les curseurs de check ne sont pas sauvegardés (premier check = vérification par
+   œuvre). L'Auto Backup Google d'Android (`allowBackup`) reste actif en complément, mais
+   ne restaure que si la signature est la même.
 
 ### Couverture de la période
 
@@ -161,6 +173,12 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 - Le scraping dépend de la structure des sites : si un site change, seuls les
   fichiers de `sources/<site>/` sont à adapter (fixtures de test à recapturer).
 - Toucher une notification ouvre le chapitre mais ne le marque pas comme lu.
+- NatoManga est derrière Cloudflare (`server: cloudflare`). Depuis le serveur de dev,
+  pas de blocage (2026-10-17) ; depuis un téléphone, non vérifiable ici. Si l'app affiche
+  « Le site bloque la requête (protection anti-robot, code 403/503) », piste : résoudre
+  le défi dans une WebView et réutiliser le cookie `cf_clearance` (comme Mihon).
+- Le SAF ne permet pas de choisir la racine de « Téléchargements » ni du stockage
+  (Android 11+) : il faut un sous-dossier.
 - Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
   des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic,
   marquer lu depuis la notification.
@@ -226,3 +244,20 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   monochrome + illustration d'accueil (plus de premier plan généré). Régénération
   vérifiée : monochrome identique octet pour octet.
 - Release mineure v0.4.0 (versionCode 4), choix laissé à l'assistant (« autonome »).
+
+### 2026-10-17 — Session 5 : v0.5.0
+- Demandes : redonner la procédure et les secrets (fichiers envoyés non trouvés par
+  l'utilisateur) ; « la recherche NatoManga ne marche pas » ; sauvegarde qui survit à
+  une désinstallation.
+- NatoManga : site joignable depuis le serveur (20 résultats pour « solo »). Cause trouvée
+  dans le code : sources activées stockées en liste explicite → NatoManga désactivée chez
+  les utilisateurs ayant touché un interrupteur avant la v0.3.0. Passage à
+  `disabled_sources` + reprise (4 tests). Messages d'erreur de recherche explicites
+  (blocage 403/429/503, réseau, délai).
+- Sauvegarde : format `BackupFile` (5 tests), `BackupMapper` (aller-retour sans perte,
+  2 tests), `BackupController` (dossier SAF, écriture auto, restauration auto au choix du
+  dossier si l'app est vide, export / import manuels), carte « Sauvegarde » dans les
+  réglages, bouton « Restaurer une sauvegarde » sur l'accueil vide.
+- 42 tests unitaires distincts. Non testé sur appareil : le sélecteur de fichiers Android
+  (SAF) ne fonctionne pas sous Robolectric.
+- Secrets de signature redonnés en clair dans la conversation (non versionnés).
