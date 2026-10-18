@@ -274,3 +274,10 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   `tools/icon/icon3d.py` (détourage, dégradé de fond mesuré, monochrome « trait »).
   L'illustration de l'accueil vide reste l'ancienne (non demandé).
 - Réponse : les secrets GitHub sont permanents, rien à redonner à l'assistant.
+
+### 2026-10-18 — Session 7 : README
+- Demande : README esthétique « de la même manière que BLKMLO/Tulipe ». Reprise de sa
+  structure : en-tête centré (emoji, accroche en gras, liens), maquette en bloc de code,
+  « Pourquoi Fresko » à phrases-clés en gras, tableaux, étapes numérotées, « Contribuer ».
+  Maquettes avec titres d'œuvres fictifs, signalés comme tels. Contenu factuel inchangé
+  (formules de consommation reprises de ce journal).
