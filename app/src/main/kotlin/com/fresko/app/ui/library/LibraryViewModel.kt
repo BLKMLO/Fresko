@@ -8,6 +8,8 @@ import com.fresko.core.model.SourceId
 import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import com.fresko.core.model.isNewerThan
+import com.fresko.app.net.ChallengeRegistry
+import com.fresko.core.network.CloudflareChallengeException
 import com.fresko.core.network.HttpException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -37,6 +39,8 @@ data class SourceSearch(
     val results: List<SearchResultItem>,
     /** Cause lisible de l'échec (ex. site qui bloque la requête). */
     val error: String? = null,
+    /** Le site exige une vérification anti-robot : page à ouvrir pour la faire. */
+    val challengeUrl: String? = null,
 )
 
 data class LibraryUiState(
@@ -50,6 +54,8 @@ data class LibraryUiState(
     val checking: Boolean = false,
     /** Œuvres suivies sur des sources désactivées (conservées, mais masquées). */
     val hiddenCount: Int = 0,
+    /** Vérifications anti-robot en attente : hôte → page à ouvrir. */
+    val pendingChallenges: Map<String, String> = emptyMap(),
 ) {
     val isSearching: Boolean get() = query.trim().length >= MIN_QUERY
     val toRead: List<TrackedItem> get() = tracked.filter { it.entity.isUnread }
@@ -61,6 +67,7 @@ private data class Slot(
     val failed: Boolean,
     val results: List<WorkInfo>,
     val error: String? = null,
+    val challengeUrl: String? = null,
 )
 
 private const val MIN_QUERY = 2
@@ -75,13 +82,14 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
         it.id to SourceUi(it.id, it.displayName, it.hasEarlyAccess)
     }
 
+    private val searchInput = combine(query, slots, c.challenges.pending) { q, s, ch -> Triple(q, s, ch) }
+
     val state: StateFlow<LibraryUiState> = combine(
         c.works.observeTracked(),
         c.settings.settings,
-        query,
-        slots,
+        searchInput,
         c.scheduler.observeManualCheck(),
-    ) { works, settings, q, slotMap, checking ->
+    ) { works, settings, (q, slotMap, challenges), checking ->
         val enabled = c.sources.all.filter { it.id in settings.enabledSources }.mapNotNull { sourcesUi[it.id] }
         val enabledIds = enabled.map { it.id }.toSet()
         val tracked = works
@@ -102,6 +110,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
                     loading = slot?.loading ?: true,
                     failed = slot?.failed ?: false,
                     error = slot?.error,
+                    challengeUrl = slot?.challengeUrl,
                     results = slot?.results.orEmpty().map { SearchResultItem(it, it.key in trackedKeys) },
                 )
             } else emptyList(),
@@ -109,6 +118,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             lastCheck = settings.lastSuccessBySource.filterKeys { it in enabledIds }.values.maxOrNull(),
             checking = checking,
             hiddenCount = works.count { SourceId(it.sourceId) !in enabledIds },
+            pendingChallenges = challenges,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -171,6 +181,13 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
         }
     }
 
+    /** Vérification réussie : on relance la recherche en cours et un check. */
+    fun onChallengeSolved() {
+        val q = query.value.trim()
+        if (q.length >= MIN_QUERY) viewModelScope.launch { runSearch(q) }
+        c.scheduler.checkNow()
+    }
+
     fun untrack(key: WorkKey) {
         viewModelScope.launch { c.works.untrack(key) }
     }
@@ -189,6 +206,12 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
                     Slot(loading = false, failed = false, results = source.search(q))
                 } catch (e: CancellationException) {
                     throw e
+                } catch (e: CloudflareChallengeException) {
+                    Slot(
+                        loading = false, failed = true, results = emptyList(),
+                        error = "${source.displayName} demande une vérification anti-robot.",
+                        challengeUrl = ChallengeRegistry.rootOf(e.url),
+                    )
                 } catch (e: Exception) {
                     Slot(loading = false, failed = true, results = emptyList(), error = describeError(e))
                 }

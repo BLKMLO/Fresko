@@ -69,6 +69,22 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    l'ancienne clé `enabled_sources` est reprise par `SourceSelection` (seules asura et
    demonic pouvaient y être désactivées) puis supprimée. Bug corrigé : une source ajoutée
    après un premier réglage restait désactivée (NatoManga « absente » de la recherche).
+9. **Anti-robot Cloudflare** (v0.6.0, `app/net/`) :
+   - `OkHttpFetcher` lève `CloudflareChallengeException` (code 403/429/503 + en-tête
+     `cf-mitigated: challenge`, ou serveur cloudflare + marqueurs de page de défi ;
+     `CloudflareDetector`, 4 tests).
+   - Cookies partagés OkHttp ↔ WebView (`WebViewCookieJar` sur `CookieManager`) et même
+     User-Agent partout (`WebUserAgent` : UA de la WebView sans « ; wv » ni « Version/x ») :
+     `cf_clearance` est lié au User-Agent.
+   - `ChallengeAwareFetcher` : sur défi, résolution invisible (`CloudflareSolver`, WebView hors
+     écran, attente d'un **nouveau** `cf_clearance`, 30 s max, 1 tentative / 30 min / site),
+     puis un nouvel essai ; sinon `ChallengeRegistry` note le site « en attente »
+     (SharedPreferences `challenges`) et l'erreur remonte. Toute requête réussie l'efface.
+   - UI : bandeau « Vérification requise » sur l'accueil, bouton dans la section de recherche,
+     notification depuis le worker (1 / 6 h / site). `ChallengeActivity` affiche le site et
+     se ferme dès qu'un nouveau `cf_clearance` apparaît (puis recherche + check relancés).
+   - Tests Robolectric `ChallengeAwareFetcherTest` (6) ; `robolectric.dependency.repo.url`
+     pointe désormais toujours vers le miroir Google de Maven Central.
 8. **Sauvegarde** (v0.5.0) : `BackupController` (app) écrit `fresko-sauvegarde.json`
    (format `BackupFile` v1 dans `core/domain/backup`, JSON lisible) dans un dossier choisi
    via le sélecteur Android (accès persistant), à chaque changement (anti-rebond 3 s,
@@ -177,10 +193,11 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 - Le scraping dépend de la structure des sites : si un site change, seuls les
   fichiers de `sources/<site>/` sont à adapter (fixtures de test à recapturer).
 - Toucher une notification ouvre le chapitre mais ne le marque pas comme lu.
-- NatoManga est derrière Cloudflare (`server: cloudflare`). Depuis le serveur de dev,
-  pas de blocage (2026-10-17) ; depuis un téléphone, non vérifiable ici. Si l'app affiche
-  « Le site bloque la requête (protection anti-robot, code 403/503) », piste : résoudre
-  le défi dans une WebView et réutiliser le cookie `cf_clearance` (comme Mihon).
+- NatoManga est derrière Cloudflare. Depuis le serveur de dev, jamais de défi ; sur le
+  téléphone de l'utilisateur, défi confirmé (2026-10-23) → mécanisme anti-robot v0.6.0
+  (ci-dessous). Non testable ici de bout en bout (pas de WebView réelle sous Robolectric).
+  Limite : un **blocage** Cloudflare (page « Sorry, you have been blocked », WAF) n'est pas
+  un défi et ne se résout pas ; l'écran de vérification l'affichera tel quel.
 - Le SAF ne permet pas de choisir la racine de « Téléchargements » ni du stockage
   (Android 11+) : il faut un sous-dossier.
 - Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
@@ -281,3 +298,12 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   « Pourquoi Fresko » à phrases-clés en gras, tableaux, étapes numérotées, « Contribuer ».
   Maquettes avec titres d'œuvres fictifs, signalés comme tels. Contenu factuel inchangé
   (formules de consommation reprises de ce journal).
+
+### 2026-10-23 — Session 8 : v0.6.0
+- Demande : NatoManga inutilisable sur le téléphone à cause du filtre anti-robot ; idée de
+  l'utilisateur : afficher le site une fois pour faire le captcha et garder les infos.
+- Fait : détection du défi Cloudflare, résolution invisible automatique puis vérification
+  manuelle une fois (cookie conservé, même User-Agent partout), bandeau / bouton /
+  notification. 52 tests unitaires distincts (dont 6 Robolectric pour le mécanisme).
+- Non vérifiable ici : comportement réel de Cloudflare sur le téléphone (le serveur de dev
+  n'est jamais challengé) et durée de validité du cookie (fixée par le site).

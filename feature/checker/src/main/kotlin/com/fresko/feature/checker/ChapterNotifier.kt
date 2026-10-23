@@ -65,6 +65,27 @@ class ChapterNotifier(private val context: Context) {
         }
     }
 
+    /** Un site demande une vérification anti-robot : un appui ouvre l'écran de vérification. */
+    fun notifyChallenge(host: String, intent: Intent) {
+        if (!canNotify()) return
+        ensureChannel()
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_chapter)
+            .setColor(ACCENT)
+            .setContentTitle("Vérification requise : $host")
+            .setContentText("Le site bloque les vérifications. Touchez pour la faire une fois.")
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context, host.hashCode(), intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            )
+            .build()
+        notifySafely(NotificationManagerCompat.from(context), CHALLENGE_ID_BASE + host.hashCode(), notification)
+    }
+
     private fun canNotify(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
@@ -96,5 +117,6 @@ class ChapterNotifier(private val context: Context) {
         private const val ACCENT = 0xFFFF6B4A.toInt()
         private const val GROUP = "fresko_new_chapters"
         private const val SUMMARY_ID = 0x5EED
+        private const val CHALLENGE_ID_BASE = 0x0C0F
     }
 }

@@ -13,5 +13,6 @@ kotlin {
 
 dependencies {
     api(libs.kotlinx.coroutines.core)
-    implementation(libs.okhttp)
+    api(libs.okhttp)
+    testImplementation(libs.junit)
 }

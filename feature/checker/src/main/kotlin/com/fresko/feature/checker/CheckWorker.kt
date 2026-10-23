@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.fresko.core.domain.UpdateChecker
+import com.fresko.core.network.CloudflareChallengeException
 
 /** Exécute un check : interroge les sources, notifie les nouveaux chapitres. */
 class CheckWorker(
@@ -19,6 +20,7 @@ class CheckWorker(
             val report = deps.checker.check()
             report.errors.forEach { (source, e) ->
                 Log.w(TAG, "Check ${source.value} en échec : ${e.message}", e)
+                if (e is CloudflareChallengeException) deps.onChallenge(e)
             }
             deps.notifier.notify(report.newChapters)
         } finally {
@@ -46,4 +48,6 @@ class CheckerDependencies(
     val notifier: ChapterNotifier,
     val scheduler: CheckScheduler,
     val intervalMinutes: suspend () -> Int,
+    /** Un site exige une vérification anti-robot que l'app n'a pas pu passer seule. */
+    val onChallenge: (CloudflareChallengeException) -> Unit = {},
 )

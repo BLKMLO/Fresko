@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.fresko.app.R
+import com.fresko.app.challenge.ChallengeActivity
 import com.fresko.app.ui.settings.BACKUP_MIME_TYPES
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -84,6 +85,12 @@ import com.fresko.core.model.WorkKey
 fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val challenge = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            Toast.makeText(context, "Vérification réussie.", Toast.LENGTH_SHORT).show()
+            viewModel.onChallengeSolved()
+        }
+    }
     val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.restore(uri) { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     }
@@ -100,6 +107,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
             onMarkUnread = viewModel::markUnread,
             onOpenSettings = onOpenSettings,
             onRestoreBackup = { restore.launch(BACKUP_MIME_TYPES) },
+            onSolveChallenge = { url -> challenge.launch(ChallengeActivity.intent(context, url)) },
         ),
     )
 }
@@ -116,6 +124,7 @@ class LibraryActions(
     val onMarkUnread: (WorkKey) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onRestoreBackup: () -> Unit = {},
+    val onSolveChallenge: (url: String) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,6 +148,9 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
                 item(key = "header") { Header(state, actions.onOpenSettings) }
+                for ((host, url) in state.pendingChallenges) {
+                    item(key = "challenge:$host") { ChallengeBanner(host, onSolve = { actions.onSolveChallenge(url) }) }
+                }
                 item(key = "search") {
                     SearchField(
                         query = state.query,
@@ -234,7 +246,15 @@ private fun LazyListScope.searchResults(
         when {
             section.loading && section.results.isEmpty() -> items(3, key = { "ph:$sid:$it" }) { PlaceholderRow() }
             section.failed -> item(key = "fail:$sid") {
-                Hint("Recherche impossible. " + (section.error ?: "Réessayez plus tard."))
+                Column {
+                    Hint("Recherche impossible. " + (section.error ?: "Réessayez plus tard."))
+                    section.challengeUrl?.let { url ->
+                        Button(
+                            onClick = { actions.onSolveChallenge(url) },
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        ) { Text("Faire la vérification") }
+                    }
+                }
             }
             section.results.isEmpty() -> item(key = "none:$sid") { Hint("Aucun résultat.") }
             else -> items(section.results, key = { "r:$sid:" + it.info.key.key }) { result ->
@@ -245,6 +265,28 @@ private fun LazyListScope.searchResults(
                     modifier = Modifier.animateItem(),
                 )
             }
+        }
+    }
+}
+
+/** Un site attend une vérification anti-robot : les nouveautés n'y sont plus détectées. */
+@Composable
+private fun ChallengeBanner(host: String, onSolve: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Vérification requise", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                Text(
+                    "$host bloque les vérifications automatiques.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            Button(onClick = onSolve) { Text("Vérifier") }
         }
     }
 }

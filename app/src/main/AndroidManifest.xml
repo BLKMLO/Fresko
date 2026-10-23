@@ -23,6 +23,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".challenge.ChallengeActivity"
+            android:exported="false" />
+
         <!-- WorkManager est initialisé par FreskoApp (Configuration.Provider). -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -12,8 +12,8 @@ android {
         applicationId = "com.fresko.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.5.1"
+        versionCode = 7
+        versionName = "0.6.0"
     }
 
     // Signature : clé fournie par la CI (secrets GitHub) si présente, sinon clé debug.
@@ -78,6 +78,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
@@ -86,12 +87,14 @@ dependencies {
 // Captures d'écran (Robolectric, rendu natif) : ./gradlew :app:testDebugUnitTest -Pscreenshots
 // Images écrites dans app/build/screenshots/. Exclues par défaut (téléchargement lourd).
 tasks.withType<Test>().configureEach {
+    // Robolectric télécharge Android depuis ce miroir de Maven Central (Maven Central
+    // lui-même répond 429 dans l'environnement de dev ; le miroir marche aussi en CI).
+    systemProperty(
+        "robolectric.dependency.repo.url",
+        "https://maven-central.storage-download.googleapis.com/maven2",
+    )
     if (project.hasProperty("screenshots")) {
         systemProperty("fresko.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.path)
-        systemProperty(
-            "robolectric.dependency.repo.url",
-            "https://maven-central.storage-download.googleapis.com/maven2",
-        )
     } else {
         exclude("**/screenshots/**")
     }
