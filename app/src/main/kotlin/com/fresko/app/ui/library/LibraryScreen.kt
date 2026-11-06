@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +50,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -59,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -103,6 +107,10 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
             onRefresh = viewModel::checkNow,
             onTrack = viewModel::track,
             onUntrack = viewModel::untrack,
+            onUntrackAll = viewModel::untrackAll,
+            onStartLink = viewModel::startLinking,
+            onCancelLink = viewModel::cancelLinking,
+            onLink = viewModel::link,
             onToggleEarly = viewModel::setNotifyEarlyAccess,
             onMarkRead = viewModel::markRead,
             onMarkUnread = viewModel::markUnread,
@@ -119,7 +127,15 @@ class LibraryActions(
     val onClearQuery: () -> Unit = {},
     val onRefresh: () -> Unit = {},
     val onTrack: (WorkInfo) -> Unit = {},
+    /** Ne plus suivre une source de l'œuvre. */
     val onUntrack: (WorkKey) -> Unit = {},
+    /** Ne plus suivre l'œuvre sur aucune source. */
+    val onUntrackAll: (WorkKey) -> Unit = {},
+    /** Ajouter une source à l'œuvre : ouvre la recherche sur son titre. */
+    val onStartLink: (WorkKey) -> Unit = {},
+    val onCancelLink: () -> Unit = {},
+    /** Rattache un résultat de recherche à l'œuvre en cours de complément. */
+    val onLink: (WorkInfo) -> Unit = {},
     val onToggleEarly: (WorkKey, Boolean) -> Unit = { _, _ -> },
     val onMarkRead: (WorkKey) -> Unit = {},
     val onMarkUnread: (WorkKey) -> Unit = {},
@@ -136,7 +152,9 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
     var selectedKey by remember { mutableStateOf(initialSelection) }
-    val selected = state.tracked.firstOrNull { it.entity.key == selectedKey }
+    // Retour pendant l'ajout d'une source : on l'annule (au lieu de quitter l'app).
+    BackHandler(enabled = state.linking != null) { actions.onCancelLink() }
+    val selected = state.tracked.firstOrNull { it.contains(selectedKey) }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         PullToRefreshBox(
@@ -149,6 +167,9 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
                 item(key = "header") { Header(state, actions.onOpenSettings) }
+                state.linking?.let { target ->
+                    item(key = "linking") { LinkBanner(target.entity.title, onCancel = actions.onCancelLink) }
+                }
                 for ((host, url) in state.pendingChallenges) {
                     item(key = "challenge:$host") { ChallengeBanner(host, onSolve = { actions.onSolveChallenge(url) }) }
                 }
@@ -180,7 +201,15 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                     )
                 }
                 if (state.isSearching) {
-                    searchResults(state, actions, onSelect = { selectedKey = it })
+                    searchResults(
+                        state, actions,
+                        onSelect = { selectedKey = it },
+                        onLink = { info ->
+                            val target = state.linking?.key
+                            actions.onLink(info)
+                            selectedKey = target // la fiche se rouvre avec la nouvelle source
+                        },
+                    )
                 } else if (state.tracked.isEmpty()) {
                     item(key = "empty") { EmptyState(state.enabledSources.map { it.name }, actions.onRestoreBackup) }
                 } else {
@@ -190,16 +219,16 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                         item(key = "title_toread") {
                             SectionTitle("À lire", toRead.size.toString(), Modifier.animateItem())
                         }
-                        items(toRead, key = { "t:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-                            TrackedCard(item, onClick = { selectedKey = item.entity.key }, modifier = Modifier.animateItem())
+                        items(toRead, key = { "t:" + itemKey(it) }) { item ->
+                            TrackedCard(item, onClick = { selectedKey = item.key }, modifier = Modifier.animateItem())
                         }
                     }
                     if (upToDate.isNotEmpty()) {
                         item(key = "title_uptodate") {
                             SectionTitle("À jour", upToDate.size.toString(), Modifier.animateItem())
                         }
-                        items(upToDate, key = { "t:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-                            TrackedCard(item, onClick = { selectedKey = item.entity.key }, modifier = Modifier.animateItem())
+                        items(upToDate, key = { "t:" + itemKey(it) }) { item ->
+                            TrackedCard(item, onClick = { selectedKey = item.key }, modifier = Modifier.animateItem())
                         }
                     }
                 }
@@ -216,31 +245,41 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
         }
     }
 
-    if (selected != null) {
+    if (selected != null && state.linking == null) {
         WorkSheet(
             item = selected,
             onDismiss = { selectedKey = null },
             onOpen = open,
-            onToggleEarly = { actions.onToggleEarly(selected.entity.key, it) },
-            onMarkRead = { actions.onMarkRead(selected.entity.key) },
-            onMarkUnread = { actions.onMarkUnread(selected.entity.key) },
+            onToggleEarly = actions.onToggleEarly,
+            onMarkRead = { actions.onMarkRead(selected.key) },
+            onMarkUnread = { actions.onMarkUnread(selected.key) },
+            onRemoveSource = actions.onUntrack,
+            onAddSource = {
+                actions.onStartLink(selected.key)
+                selectedKey = null
+            },
             onUntrack = {
-                actions.onUntrack(selected.entity.key)
+                actions.onUntrackAll(selected.key)
                 selectedKey = null
             },
         )
     }
 }
 
+/** Clé de liste stable d'une œuvre (groupe ou source unique). */
+private fun itemKey(item: TrackedItem): String =
+    item.entity.groupId ?: (item.entity.sourceId + ":" + item.entity.workKey)
+
 private fun LazyListScope.searchResults(
     state: LibraryUiState,
     actions: LibraryActions,
     onSelect: (WorkKey) -> Unit,
+    onLink: (WorkInfo) -> Unit,
 ) {
     if (state.matchingTracked.isNotEmpty()) {
         item(key = "title_matching") { SectionTitle("Dans vos lectures", state.matchingTracked.size.toString()) }
-        items(state.matchingTracked, key = { "m:" + it.entity.sourceId + ":" + it.entity.workKey }) { item ->
-            TrackedCard(item, onClick = { onSelect(item.entity.key) }, modifier = Modifier.animateItem())
+        items(state.matchingTracked, key = { "m:" + itemKey(it) }) { item ->
+            TrackedCard(item, onClick = { onSelect(item.key) }, modifier = Modifier.animateItem())
         }
     }
     for (section in state.search) {
@@ -281,11 +320,41 @@ private fun LazyListScope.searchResults(
             else -> items(section.results, key = { "r:$sid:" + it.info.key.key }) { result ->
                 SearchResultRow(
                     result,
+                    linking = state.linking != null,
                     onTrack = { actions.onTrack(result.info) },
+                    onLink = { onLink(result.info) },
                     onOpenTracked = { onSelect(result.info.key) },
                     modifier = Modifier.animateItem(),
                 )
             }
+        }
+    }
+}
+
+/** Ajout d'une source : la recherche sert à trouver la même œuvre sur un autre site. */
+@Composable
+private fun LinkBanner(title: String, onCancel: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Ajouter une source à « $title »",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "Touchez « Lier » sur la même œuvre dans un autre site. Le titre peut y être différent : modifiez la recherche si besoin.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+            TextButton(onClick = onCancel) { Text("Annuler") }
         }
     }
 }
@@ -410,6 +479,7 @@ private fun SectionTitle(title: String, count: String?, modifier: Modifier = Mod
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val e = item.entity
@@ -420,14 +490,15 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Cover(e.coverUrl, e.title, item.source.id, width = 66.dp, height = 94.dp)
+            Cover(item.cover.entity.coverUrl, e.title, item.cover.source.id, width = 66.dp, height = 94.dp)
             Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SourceBadge(item.source.id, item.source.name)
-                    if (e.isUnread) {
-                        Spacer(Modifier.width(6.dp))
-                        NewBadge()
-                    }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    // La source en tête d'abord.
+                    for (m in listOf(item.lead) + (item.members - item.lead)) SourceBadge(m.source.id, m.source.name)
+                    if (item.isUnread) NewBadge()
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -439,9 +510,10 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        shortChapter(e.chapterNumber, e.chapterLabel),
+                        shortChapter(e.chapterNumber, e.chapterLabel) + if (item.isGroup) " · ${item.source.name}" else "",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
                     )
                     e.chapterPublishedAt?.let {
                         Text(
@@ -458,7 +530,9 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
                         EarlyAccessBadge()
                     }
                 }
-                e.checkError?.let { err ->
+                item.inError.firstOrNull()?.let { failed ->
+                    val err = failed.entity.checkError
+                    val where = if (item.isGroup) " (${failed.source.name})" else ""
                     Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -466,7 +540,7 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
                             tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            " Non vérifiée : $err",
+                            " Non vérifiée$where : $err",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                             maxLines = 2,
@@ -474,7 +548,7 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
                         )
                     }
                 }
-                if (item.source.hasEarlyAccess && !e.notifyEarlyAccess) {
+                if (item.members.any { it.source.hasEarlyAccess && !it.entity.notifyEarlyAccess }) {
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "Accès anticipé ignoré",
@@ -503,7 +577,9 @@ private fun NewBadge() {
 @Composable
 private fun SearchResultRow(
     result: SearchResultItem,
+    linking: Boolean,
     onTrack: () -> Unit,
+    onLink: () -> Unit,
     onOpenTracked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -533,7 +609,21 @@ private fun SearchResultRow(
                 }
             }
         }
-        if (result.tracked) {
+        if (linking) {
+            if (result.inLinkedGroup) {
+                FilledTonalButton(onClick = {}, enabled = false, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Liée")
+                }
+            } else {
+                Button(onClick = onLink, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Lier")
+                }
+            }
+        } else if (result.tracked) {
             FilledTonalButton(onClick = onOpenTracked, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                 Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))

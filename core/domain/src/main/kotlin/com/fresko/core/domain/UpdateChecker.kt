@@ -3,6 +3,7 @@ package com.fresko.core.domain
 import com.fresko.core.model.ChapterInfo
 import com.fresko.core.model.NewChapter
 import com.fresko.core.model.SourceId
+import com.fresko.core.model.TrackedWork
 import com.fresko.core.model.isNewerThan
 import com.fresko.core.source.RecentUpdates
 import com.fresko.core.source.Source
@@ -20,6 +21,10 @@ import kotlinx.coroutines.CancellationException
  * 3. on compare au dernier chapitre connu : plus récent → [NewChapter].
  *
  * Une œuvre sans chapitre connu est simplement initialisée (pas de notification).
+ *
+ * Groupes ([TrackedWork.groupId], même œuvre sur plusieurs sources) : chaque source garde
+ * son propre dernier chapitre, mais un chapitre dont le numéro est déjà connu d'une autre
+ * source du groupe n'est pas notifié une seconde fois. La première source qui publie gagne.
  *
  * Erreurs : l'échec de la requête dédiée à une œuvre (site en erreur, œuvre introuvable,
  * aucun chapitre renvoyé) est mémorisé sur l'œuvre ([TrackedWorksStore.setCheckError]) pour
@@ -107,7 +112,7 @@ class UpdateChecker(
                     }
                     latest.isNewerThan(known) -> {
                         works.saveLatestChapter(work.key, latest, startedAt)
-                        found += NewChapter(work, latest)
+                        if (!alreadyKnownInGroup(work, latest)) found += NewChapter(work, latest)
                         newKnown = latest
                     }
                 }
@@ -128,6 +133,18 @@ class UpdateChecker(
         firstError?.let { throw PartialCheckException(found, it) }
         state.saveCursor(source.id, UpdateCursor(startedAt, updates.anchors))
         return found
+    }
+
+    /**
+     * Même œuvre suivie sur plusieurs sources : le chapitre a déjà été vu (et notifié) via
+     * une autre source du groupe si son numéro n'est pas supérieur au meilleur connu.
+     * Sans numéro, impossible de comparer entre sources : on notifie.
+     */
+    private suspend fun alreadyKnownInGroup(work: TrackedWork, chapter: ChapterInfo): Boolean {
+        val group = work.groupId ?: return false
+        val number = chapter.number ?: return false
+        val best = works.groupBestNumber(group, work.key) ?: return false
+        return number <= best
     }
 }
 

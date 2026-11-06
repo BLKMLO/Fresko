@@ -7,14 +7,14 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [WorkEntity::class], version = 4, exportSchema = true)
+@Database(entities = [WorkEntity::class], version = 5, exportSchema = true)
 abstract class FreskoDatabase : RoomDatabase() {
     abstract fun workDao(): WorkDao
 
     companion object {
         fun create(context: Context): FreskoDatabase =
             Room.databaseBuilder(context, FreskoDatabase::class.java, "fresko.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
 
         /** v0.2.0 : accès anticipé par œuvre ; fin du catalogue (on ne garde que les suivies). */
@@ -49,6 +49,21 @@ abstract class FreskoDatabase : RoomDatabase() {
                             "WHERE source_id = 'natomanga' AND $column LIKE '$OLD_NATO%'"
                     )
                 }
+            }
+        }
+
+        /**
+         * v0.7.0 : même œuvre sur plusieurs sources (groupes) ; numéro du chapitre lu, pour
+         * comparer le statut « lu » entre sources (les URL diffèrent d'un site à l'autre).
+         */
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE works ADD COLUMN group_id TEXT")
+                db.execSQL("ALTER TABLE works ADD COLUMN read_chapter_number REAL")
+                db.execSQL(
+                    "UPDATE works SET read_chapter_number = chapter_number " +
+                        "WHERE read_chapter_url IS NOT NULL AND read_chapter_url = chapter_url"
+                )
             }
         }
 

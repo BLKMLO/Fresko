@@ -42,6 +42,9 @@ data class BackupWork(
     val chapter: BackupChapter? = null,
     @SerialName("read_chapter_url") val readChapterUrl: String? = null,
     @SerialName("notify_early_access") val notifyEarlyAccess: Boolean = true,
+    /** Groupe « même œuvre sur plusieurs sources » (v0.7.0 ; absent = suivie seule). */
+    val group: String? = null,
+    @SerialName("read_chapter_number") val readChapterNumber: Double? = null,
 )
 
 @Serializable

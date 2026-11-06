@@ -40,6 +40,8 @@ data class ChapterInfo(
  * @param earlyPending un chapitre en accès anticipé a été ignoré et n'est pas
  *   encore gratuit : l'œuvre est vérifiée individuellement à chaque check.
  * @param checkError message de l'échec de la dernière requête dédiée à cette œuvre.
+ * @param groupId identifiant du groupe quand la même œuvre est suivie sur plusieurs
+ *   sources : un chapitre déjà connu d'une autre source du groupe n'est pas re-notifié.
  */
 data class TrackedWork(
     val key: WorkKey,
@@ -50,6 +52,8 @@ data class TrackedWork(
     val earlyPending: Boolean = false,
     /** Échec de la dernière vérification de cette œuvre (null = vérifiée normalement). */
     val checkError: String? = null,
+    /** Groupe « même œuvre sur plusieurs sources » (null = suivie seule). */
+    val groupId: String? = null,
 )
 
 /** Nouveau chapitre détecté pour une œuvre suivie. */

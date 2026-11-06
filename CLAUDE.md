@@ -15,7 +15,7 @@ Depuis la v0.2.0, **la recherche est le seul moyen de trouver une œuvre** (plus
 ```
 app/                 UI Compose (écran suivis+recherche, fiche œuvre, réglages), thème, câblage (AppContainer), SourceRegistry
 feature/checker/     WorkManager : CheckWorker, CheckScheduler, ChapterNotifier (Android)
-core/data/           Room (œuvres suivies, schéma v4) + DataStore (réglages, curseurs de check) (Android)
+core/data/           Room (œuvres suivies, schéma v5) + DataStore (réglages, curseurs de check) (Android)
 core/domain/         UpdateChecker : logique du check, pure Kotlin, testée
 core/source/         Interface Source + UpdateCursor/RecentUpdates (pure Kotlin)
 core/network/        HttpFetcher (interface) + OkHttpFetcher (pure Kotlin)
@@ -94,6 +94,24 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    fiche, bandeaux sur l'accueil, ligne dans Réglages > Sources. **Avant la v0.7.0, ces erreurs
    n'étaient que journalisées (Log.w), sauf les défis Cloudflare.** Pas de notification d'erreur.
    Au suivi d'une œuvre, l'échec de la requête de référence est aussi enregistré.
+11. **Même œuvre sur plusieurs sources** (v0.7.0, option A choisie par l'utilisateur :
+   regroupement manuel). Colonne `group_id` (UUID, Room v5) : chaque source reste une ligne
+   avec son propre dernier chapitre et son propre check. `UpdateChecker` ne notifie pas un
+   chapitre dont le numéro ≤ meilleur numéro connu des **autres** sources du groupe
+   (`groupBestNumber`) : la première source qui publie gagne ; sans numéro → notifié.
+   Statut « lu » d'un groupe **par numéro** (`read_chapter_number`, migration : = numéro du
+   chapitre si lu) : à lire si max(chapitres) > max(numéros lus), repli sur l'URL si un numéro
+   manque. Marquer lu / non lu et « Ne plus suivre » portent sur tout le groupe ; « × » retire
+   une source (groupe réduit à 1 → dissous). Ajout : fiche > « Ajouter une source » → mode
+   liaison (`linkTarget`) : recherche pré-remplie avec le titre, sources déjà présentes exclues,
+   bouton « Lier » (une œuvre déjà suivie ailleurs rejoint le groupe, groupes fusionnés).
+   Référence d'une source ajoutée : lue, **sauf** si elle est en avance sur le numéro lu des
+   autres sources (`markReferenceRead`) → l'œuvre passe « à lire », sans notification.
+   UI : une carte par groupe (source en tête = chapitre le plus avancé, puis le plus ancien
+   publié), toutes les pastilles, « Ch. N · Source ». Sauvegarde : champs optionnels `group`
+   et `read_chapter_number` (format v1 inchangé, lisible par les anciennes versions).
+   **Limite** : numérotations différentes entre sites non gérées (pas de décalage par source) ;
+   les numéros de chaque source sont visibles dans la fiche.
 8. **Sauvegarde** (v0.5.0) : `BackupController` (app) écrit `fresko-sauvegarde.json`
    (format `BackupFile` v1 dans `core/domain/backup`, JSON lisible) dans un dossier choisi
    via le sélecteur Android (accès persistant), à chaque changement (anti-rebond 3 s,
@@ -217,8 +235,12 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   un défi et ne se résout pas ; l'écran de vérification l'affichera tel quel.
 - Le SAF ne permet pas de choisir la racine de « Téléchargements » ni du stockage
   (Android 11+) : il faut un sous-dossier.
-- Plusieurs sources pour une même œuvre : options proposées le 2026-11-06, en attente du choix
-  de l'utilisateur (rien d'implémenté).
+- Groupes multi-sources : pas de décalage de numérotation par source ; si le check initialise
+  une source ajoutée (requête de référence en échec au moment du lien), sa référence est
+  marquée lue même si elle est en avance (cas limite non traité). Couche Room des groupes
+  (`WorkRepository`) non couverte par des tests automatiques (SQL relu, migration rejouée).
+- KSP : à la création d'un nouveau schéma Room, les variantes debug/release peuvent se
+  concurrencer (« Empty schema file ») → lancer d'abord `:core:data:kspDebugKotlin` seul.
 - Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
   des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic,
   marquer lu depuis la notification.
@@ -341,3 +363,13 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   sans cookie) ; il passe par le client de l'app + Referer du site. **Non vérifié sur appareil.**
 - 60 tests unitaires distincts, 0 échec ; `assembleDebug` OK ; migration 3→4 rejouée sur SQLite
   (schéma identique à 4.json) ; test de fumée réel NatoManga (20 résultats, chapitre via l'API).
+
+### 2026-11-06 — Session 10 : même œuvre sur plusieurs sources
+- Choix de l'utilisateur : **option A** (regroupement manuel), parmi A (manuel), B (automatique
+  par titre), C (source principale + secours), D (statu quo). Question des numérotations
+  différentes laissée sans réponse → non traitée, numéros visibles par source dans la fiche.
+- Fait : voir « Même œuvre sur plusieurs sources ». Room v5 (migration 4→5 rejouée sur SQLite,
+  schéma identique à 5.json). 3 tests de groupe dans `UpdateCheckerTest`, 1 test de sauvegarde
+  (numéro lu déduit d'une sauvegarde antérieure). 64 tests unitaires distincts, 0 échec ;
+  `assembleDebug` et `assembleRelease` OK ; captures 9 (carte groupée), 10 (fiche), 11 (liaison).
+- Toujours pas de release v0.7.0 (non demandée) ; non testé sur appareil.

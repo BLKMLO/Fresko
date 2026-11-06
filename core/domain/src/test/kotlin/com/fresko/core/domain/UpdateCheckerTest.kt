@@ -56,6 +56,9 @@ class UpdateCheckerTest {
         override suspend fun setEarlyPending(key: WorkKey, pending: Boolean) {
             works[key] = works.getValue(key).copy(earlyPending = pending)
         }
+        override suspend fun groupBestNumber(groupId: String, exclude: WorkKey) =
+            works.values.filter { it.groupId == groupId && it.key != exclude }
+                .mapNotNull { it.lastKnownChapter?.number }.maxOrNull()
         override suspend fun setCheckError(key: WorkKey, message: String?, atMillis: Long) {
             errorWrites++
             works[key] = works.getValue(key).copy(checkError = message)
@@ -241,5 +244,42 @@ class UpdateCheckerTest {
         val ok = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to ch(1.0)))
         UpdateChecker(listOf(ok), store, store, store).check()
         assertTrue(store.sourceErrors.isEmpty())
+    }
+
+    // --- Même œuvre sur plusieurs sources ---
+
+    private val src2 = SourceId("fake2")
+    private fun grouped(source: SourceId, k: String, known: ChapterInfo?) =
+        TrackedWork(WorkKey(source, k), k, "https://x/$k", known, groupId = "g1")
+
+    @Test
+    fun `groupe - premiere source qui publie notifie, la seconde non`() = runTest {
+        val store = Store(listOf(grouped(src, "a", ch(282.0)), grouped(src2, "b", ch(282.0))))
+        val s1 = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to ch(283.0)))
+        val s2 = FakeSource(src2, RecentUpdates(emptyMap(), false), perWork = mapOf(WorkKey(src2, "b") to ch(283.0)))
+        val first = UpdateChecker(listOf(s1, s2), store, store, store).check()
+        assertEquals(listOf(key("a")), first.newChapters.map { it.work.key })
+        // Chaque source garde son propre dernier chapitre.
+        assertEquals(283.0, store.works.getValue(WorkKey(src2, "b")).lastKnownChapter!!.number!!, 0.0)
+    }
+
+    @Test
+    fun `groupe - la source en retard rattrape sans notifier, puis la suivante notifie`() = runTest {
+        val store = Store(listOf(grouped(src, "a", ch(283.0)), grouped(src2, "b", ch(282.0))))
+        val s1 = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to ch(283.0)))
+        val s2 = FakeSource(src2, RecentUpdates(emptyMap(), false), perWork = mapOf(WorkKey(src2, "b") to ch(283.0)))
+        assertTrue(UpdateChecker(listOf(s1, s2), store, store, store).check().newChapters.isEmpty())
+        val s2next = FakeSource(src2, RecentUpdates(emptyMap(), false), perWork = mapOf(WorkKey(src2, "b") to ch(284.0)))
+        val report = UpdateChecker(listOf(s1, s2next), store, store, store).check()
+        assertEquals(listOf(WorkKey(src2, "b")), report.newChapters.map { it.work.key })
+    }
+
+    @Test
+    fun `groupe - chapitre sans numero toujours notifie`() = runTest {
+        val store = Store(listOf(grouped(src, "a", ch(10.0)), grouped(src2, "b", ch(12.0))))
+        val noNumber = ChapterInfo(null, "Épilogue", "https://x/epilogue")
+        val s1 = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to noNumber))
+        val report = UpdateChecker(listOf(s1), store, store, store).check()
+        assertEquals(1, report.newChapters.size)
     }
 }

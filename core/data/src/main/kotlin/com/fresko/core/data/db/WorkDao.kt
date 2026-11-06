@@ -38,6 +38,7 @@ interface WorkDao {
     @Query(
         """UPDATE works SET
            read_chapter_url = CASE WHEN chapter_url IS NULL THEN :url ELSE read_chapter_url END,
+           read_chapter_number = CASE WHEN chapter_url IS NULL THEN :number ELSE read_chapter_number END,
            chapter_number = :number, chapter_label = :label, chapter_url = :url,
            chapter_published_at = :publishedAt, chapter_early_access = :earlyAccess,
            last_checked_at = :checkedAt
@@ -51,11 +52,49 @@ interface WorkDao {
     @Query("UPDATE works SET notify_early_access = :notify, early_pending = 0 WHERE source_id = :sourceId AND work_key = :key")
     suspend fun setNotifyEarlyAccess(sourceId: String, key: String, notify: Boolean)
 
-    @Query("UPDATE works SET read_chapter_url = chapter_url WHERE source_id = :sourceId AND work_key = :key")
+    @Query(
+        """UPDATE works SET read_chapter_url = chapter_url, read_chapter_number = chapter_number
+           WHERE source_id = :sourceId AND work_key = :key"""
+    )
     suspend fun markRead(sourceId: String, key: String)
 
-    @Query("UPDATE works SET read_chapter_url = NULL WHERE source_id = :sourceId AND work_key = :key")
+    @Query(
+        """UPDATE works SET read_chapter_url = NULL, read_chapter_number = NULL
+           WHERE source_id = :sourceId AND work_key = :key"""
+    )
     suspend fun markUnread(sourceId: String, key: String)
+
+    // --- Groupes : même œuvre suivie sur plusieurs sources ---
+
+    @Query("SELECT * FROM works WHERE tracked = 1 AND group_id = :groupId")
+    suspend fun groupMembers(groupId: String): List<WorkEntity>
+
+    @Query(
+        """SELECT MAX(chapter_number) FROM works WHERE tracked = 1 AND group_id = :groupId
+           AND NOT (source_id = :sourceId AND work_key = :key)"""
+    )
+    suspend fun groupBestNumber(groupId: String, sourceId: String, key: String): Double?
+
+    @Query(
+        """SELECT MAX(read_chapter_number) FROM works WHERE tracked = 1 AND group_id = :groupId
+           AND NOT (source_id = :sourceId AND work_key = :key)"""
+    )
+    suspend fun groupReadNumber(groupId: String, sourceId: String, key: String): Double?
+
+    @Query("UPDATE works SET group_id = :groupId WHERE source_id = :sourceId AND work_key = :key")
+    suspend fun setGroup(sourceId: String, key: String, groupId: String?)
+
+    @Query("UPDATE works SET group_id = :to WHERE group_id = :from")
+    suspend fun moveGroup(from: String, to: String)
+
+    @Query("UPDATE works SET read_chapter_url = chapter_url, read_chapter_number = chapter_number WHERE group_id = :groupId")
+    suspend fun markGroupRead(groupId: String)
+
+    @Query("UPDATE works SET read_chapter_url = NULL, read_chapter_number = NULL WHERE group_id = :groupId")
+    suspend fun markGroupUnread(groupId: String)
+
+    @Query("DELETE FROM works WHERE group_id = :groupId")
+    suspend fun deleteGroup(groupId: String)
 
     @Query("UPDATE works SET early_pending = :pending WHERE source_id = :sourceId AND work_key = :key")
     suspend fun setEarlyPending(sourceId: String, key: String, pending: Boolean)

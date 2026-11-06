@@ -15,6 +15,7 @@ class BackupMapperTest {
         chapterNumber = 281.0, chapterLabel = "Chapitre 281", chapterUrl = "https://a/281",
         chapterPublishedAt = 20, chapterEarlyAccess = true, lastCheckedAt = null,
         notifyEarlyAccess = false, earlyPending = false, readChapterUrl = "https://a/280",
+        groupId = "g-1", readChapterNumber = 280.0,
     )
 
     @Test
@@ -27,7 +28,18 @@ class BackupMapperTest {
     @Test
     fun `oeuvre sans chapitre`() {
         val bare = full.copy(chapterNumber = null, chapterLabel = null, chapterUrl = null, chapterPublishedAt = null,
-            chapterEarlyAccess = false, readChapterUrl = null, notifyEarlyAccess = true)
+            chapterEarlyAccess = false, readChapterUrl = null, notifyEarlyAccess = true,
+            groupId = null, readChapterNumber = null)
         assertEquals(bare, BackupMapper.toEntity(BackupMapper.toBackup(bare)))
+    }
+
+    @Test
+    fun `sauvegarde v0_6 sans numero lu - deduit si le chapitre connu est lu`() {
+        val json = """{"format":"fresko-backup","version":1,"exported_at":1,"settings":{"interval_minutes":10},
+            "works":[{"source":"asura","key":"a","title":"A","url":"u",
+            "chapter":{"number":12.0,"label":"Chapitre 12","url":"c12"},"read_chapter_url":"c12"}]}"""
+        val e = BackupMapper.toEntity(BackupCodec.decode(json).works.single())
+        assertEquals(12.0, e.readChapterNumber!!, 0.0)
+        assertEquals(null, e.groupId)
     }
 }

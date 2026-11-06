@@ -113,10 +113,10 @@ class ScreenshotTest {
     /** Erreurs de check : source entière en échec + œuvre non récupérée par la requête dédiée. */
     private val errorState = LibraryUiState(
         tracked = tracked.mapIndexed { i, t ->
-            if (i == 1) t.copy(entity = t.entity.copy(
+            if (i == 1) TrackedItem(t.entity.copy(
                 checkError = "Œuvre introuvable sur le site (code 400) : elle a peut-être été retirée ou renommée.",
                 checkErrorAt = now - 3 * 60_000,
-            )) else t
+            ), t.source) else t
         },
         enabledSources = listOf(asura, demonic, nato),
         lastCheck = now - 4 * 60_000,
@@ -127,6 +127,48 @@ class ScreenshotTest {
 
     @Test fun errorSheetDark() = shot("8-error-sheet", dark = true, multipleRoots = true) {
         LibraryContent(errorState, LibraryActions(), initialSelection = errorState.tracked[1].entity.key)
+    }
+
+    /** Même œuvre sur deux sources : Asura en avance (283), NatoManga au 282. */
+    private val group = TrackedItem(
+        listOf(
+            com.fresko.app.ui.library.Member(
+                work(asura, "solo", "Solo Max-Level Newbie", 283.0, 12).entity.copy(groupId = "g", readChapterNumber = 282.0), asura,
+            ),
+            com.fresko.app.ui.library.Member(
+                work(nato, "solo-nato", "Solo Max-Level Newbie", 282.0, 3 * 24 * 60, read = true).entity.copy(groupId = "g", readChapterNumber = 282.0), nato,
+            ),
+        )
+    )
+    private val groupState = LibraryUiState(
+        tracked = listOf(group) + tracked.drop(1),
+        enabledSources = listOf(asura, demonic, nato),
+        lastCheck = now - 4 * 60_000,
+    )
+
+    @Test fun groupLight() = shot("9-group", dark = false) { LibraryContent(groupState, LibraryActions()) }
+
+    @Test fun groupSheetLight() = shot("10-group-sheet", dark = false, multipleRoots = true) {
+        LibraryContent(groupState, LibraryActions(), initialSelection = group.key)
+    }
+
+    @Test fun linkingDark() = shot("11-linking", dark = true) {
+        LibraryContent(
+            LibraryUiState(
+                tracked = tracked,
+                query = "The Taming",
+                linking = tracked[1],
+                enabledSources = listOf(asura, demonic, nato),
+                search = listOf(
+                    SourceSearch(
+                        asura, loading = false, failed = false,
+                        results = listOf(SearchResultItem(info(asura, "taming", "The Taming", 40.0, 30), tracked = false)),
+                    ),
+                    SourceSearch(demonic, loading = false, failed = false, results = emptyList()),
+                ),
+            ),
+            LibraryActions(),
+        )
     }
 
     @Test fun emptyDark() = shot("2-empty", dark = true) {

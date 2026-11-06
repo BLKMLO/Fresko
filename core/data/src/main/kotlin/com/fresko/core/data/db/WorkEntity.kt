@@ -34,6 +34,10 @@ data class WorkEntity(
     /** Échec de la dernière vérification dédiée (v0.7.0), null = vérifiée normalement. */
     @ColumnInfo(name = "check_error") val checkError: String? = null,
     @ColumnInfo(name = "check_error_at") val checkErrorAt: Long? = null,
+    /** Groupe « même œuvre sur plusieurs sources » (v0.7.0), null = suivie seule. */
+    @ColumnInfo(name = "group_id") val groupId: String? = null,
+    /** Numéro du chapitre marqué lu (v0.7.0) : le statut « lu » d'un groupe se compare par numéro. */
+    @ColumnInfo(name = "read_chapter_number") val readChapterNumber: Double? = null,
 ) {
     /** Un chapitre plus récent que le dernier lu est disponible. */
     val isUnread: Boolean get() = chapterUrl != null && chapterUrl != readChapterUrl
@@ -49,5 +53,5 @@ data class WorkEntity(
             isEarlyAccess = chapterEarlyAccess,
         )
 
-    fun toTrackedWork() = TrackedWork(key, title, url, chapter, notifyEarlyAccess, earlyPending, checkError)
+    fun toTrackedWork() = TrackedWork(key, title, url, chapter, notifyEarlyAccess, earlyPending, checkError, groupId)
 }

@@ -10,6 +10,7 @@ import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 /** Point d'accès unique aux œuvres suivies pour l'UI et le check. */
 class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
@@ -18,8 +19,13 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
 
     suspend fun get(key: WorkKey): WorkEntity? = dao.get(key.sourceId.value, key.key)
 
-    /** Suit une œuvre trouvée par la recherche (référence = son dernier chapitre connu). */
-    suspend fun track(info: WorkInfo, now: Long = System.currentTimeMillis()) {
+    /**
+     * Suit une œuvre trouvée par la recherche (référence = son dernier chapitre connu).
+     * @param groupWith œuvre déjà suivie dont c'est la même œuvre sur une autre source :
+     *   les deux rejoignent le même groupe.
+     */
+    suspend fun track(info: WorkInfo, now: Long = System.currentTimeMillis(), groupWith: WorkKey? = null) {
+        val groupId = groupWith?.let { ensureGroup(it) }
         val c = info.latestChapter
         dao.insert(
             WorkEntity(
@@ -36,13 +42,60 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
                 chapterPublishedAt = c?.publishedAtMillis,
                 chapterEarlyAccess = c?.isEarlyAccess ?: false,
                 readChapterUrl = c?.url, // ce qui est déjà sorti au moment du suivi est « lu »
+                readChapterNumber = c?.number,
+                groupId = groupId,
             )
         )
+        if (groupId != null) markReferenceRead(info.key)
     }
 
-    suspend fun markRead(key: WorkKey) = dao.markRead(key.sourceId.value, key.key)
+    /**
+     * La référence (chapitre déjà sorti au moment du suivi) est considérée comme lue… sauf,
+     * dans un groupe, si cette source est en avance sur ce que l'utilisateur a lu ailleurs :
+     * l'œuvre apparaît alors « à lire » (sans notification).
+     */
+    suspend fun markReferenceRead(key: WorkKey) {
+        val e = get(key) ?: return
+        val group = e.groupId ?: return dao.markRead(e.sourceId, e.workKey)
+        val number = e.chapterNumber
+        val readElsewhere = dao.groupReadNumber(group, e.sourceId, e.workKey)
+        if (number == null || readElsewhere == null || number <= readElsewhere) {
+            dao.markRead(e.sourceId, e.workKey)
+        } else {
+            dao.markUnread(e.sourceId, e.workKey)
+        }
+    }
 
-    suspend fun markUnread(key: WorkKey) = dao.markUnread(key.sourceId.value, key.key)
+    /** Rattache une œuvre déjà suivie (et son éventuel groupe) au groupe de [groupWith]. */
+    suspend fun joinGroup(key: WorkKey, groupWith: WorkKey) {
+        if (key == groupWith) return
+        val target = ensureGroup(groupWith)
+        val e = get(key) ?: return
+        when (val current = e.groupId) {
+            null -> dao.setGroup(e.sourceId, e.workKey, target)
+            target -> Unit
+            else -> dao.moveGroup(current, target)
+        }
+    }
+
+    private suspend fun ensureGroup(key: WorkKey): String {
+        val lead = get(key) ?: error("Œuvre inconnue : $key")
+        lead.groupId?.let { return it }
+        val id = UUID.randomUUID().toString()
+        dao.setGroup(lead.sourceId, lead.workKey, id)
+        return id
+    }
+
+    /** Marque lue l'œuvre (et toutes les sources de son groupe). */
+    suspend fun markRead(key: WorkKey) {
+        val group = get(key)?.groupId
+        if (group != null) dao.markGroupRead(group) else dao.markRead(key.sourceId.value, key.key)
+    }
+
+    suspend fun markUnread(key: WorkKey) {
+        val group = get(key)?.groupId
+        if (group != null) dao.markGroupUnread(group) else dao.markUnread(key.sourceId.value, key.key)
+    }
 
     /** Nombre d'œuvres suivies par source (y compris sources désactivées). */
     fun observeCountsBySource(): Flow<Map<SourceId, Int>> =
@@ -54,7 +107,24 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
     /** Restauration : ajoute ou remplace les œuvres (celles déjà présentes sont écrasées). */
     suspend fun restore(entities: List<WorkEntity>) = dao.insertAll(entities)
 
-    suspend fun untrack(key: WorkKey) = dao.delete(key.sourceId.value, key.key)
+    /** Ne plus suivre cette source ; un groupe réduit à une seule source est dissous. */
+    suspend fun untrack(key: WorkKey) {
+        val group = get(key)?.groupId
+        dao.delete(key.sourceId.value, key.key)
+        if (group != null) {
+            val rest = dao.groupMembers(group)
+            if (rest.size == 1) dao.setGroup(rest[0].sourceId, rest[0].workKey, null)
+        }
+    }
+
+    /** Ne plus suivre l'œuvre du tout (toutes les sources de son groupe). */
+    suspend fun untrackAll(key: WorkKey) {
+        val group = get(key)?.groupId
+        if (group != null) dao.deleteGroup(group) else dao.delete(key.sourceId.value, key.key)
+    }
+
+    override suspend fun groupBestNumber(groupId: String, exclude: WorkKey): Double? =
+        dao.groupBestNumber(groupId, exclude.sourceId.value, exclude.key)
 
     suspend fun setNotifyEarlyAccess(key: WorkKey, notify: Boolean) =
         dao.setNotifyEarlyAccess(key.sourceId.value, key.key, notify)

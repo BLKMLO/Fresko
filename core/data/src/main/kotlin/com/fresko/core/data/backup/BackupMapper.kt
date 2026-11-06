@@ -24,6 +24,8 @@ object BackupMapper {
         ) else null,
         readChapterUrl = e.readChapterUrl,
         notifyEarlyAccess = e.notifyEarlyAccess,
+        group = e.groupId,
+        readChapterNumber = e.readChapterNumber,
     )
 
     /** Les URL d'anciens domaines (sauvegardes antérieures) sont mises à jour ([LegacyUrls]). */
@@ -42,5 +44,9 @@ object BackupMapper {
         chapterEarlyAccess = w.chapter?.earlyAccess ?: false,
         notifyEarlyAccess = w.notifyEarlyAccess,
         readChapterUrl = LegacyUrls.normalize(w.source, w.readChapterUrl),
+        groupId = w.group,
+        // Sauvegarde antérieure à la v0.7.0 : numéro lu déduit (lu = chapitre connu).
+        readChapterNumber = w.readChapterNumber
+            ?: w.chapter?.takeIf { w.readChapterUrl != null && w.readChapterUrl == it.url }?.number,
     )
 }

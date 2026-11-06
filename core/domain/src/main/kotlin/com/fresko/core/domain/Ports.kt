@@ -12,6 +12,12 @@ interface TrackedWorksStore {
     suspend fun saveLatestChapter(key: WorkKey, chapter: ChapterInfo, checkedAtMillis: Long)
     suspend fun setEarlyPending(key: WorkKey, pending: Boolean)
 
+    /**
+     * Plus grand numéro de chapitre déjà connu des **autres** œuvres du groupe [groupId]
+     * (hors [exclude]), ou null si aucun.
+     */
+    suspend fun groupBestNumber(groupId: String, exclude: WorkKey): Double?
+
     /** Mémorise (ou efface, si [message] est null) l'échec de vérification d'une œuvre. */
     suspend fun setCheckError(key: WorkKey, message: String?, atMillis: Long)
 }
