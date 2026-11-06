@@ -85,7 +85,7 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
      se ferme dès qu'un nouveau `cf_clearance` apparaît (puis recherche + check relancés).
    - Tests Robolectric `ChallengeAwareFetcherTest` (6) ; `robolectric.dependency.repo.url`
      pointe désormais toujours vers le miroir Google de Maven Central.
-10. **Erreurs de check** (v0.7.0, non publiée en release à ce jour) : un échec de la requête dédiée à
+10. **Erreurs de check** (v0.7.0) : un échec de la requête dédiée à
    une œuvre (exception, ou source qui ne renvoie aucun chapitre) est enregistré sur l'œuvre
    (`check_error`, `check_error_at`, Room v4) ; l'œuvre est réinterrogée à chaque check tant
    que l'erreur persiste, et l'erreur s'efface dès qu'elle est revue. Échec global d'une source
@@ -372,4 +372,4 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   schéma identique à 5.json). 3 tests de groupe dans `UpdateCheckerTest`, 1 test de sauvegarde
   (numéro lu déduit d'une sauvegarde antérieure). 64 tests unitaires distincts, 0 échec ;
   `assembleDebug` et `assembleRelease` OK ; captures 9 (carte groupée), 10 (fiche), 11 (liaison).
-- Toujours pas de release v0.7.0 (non demandée) ; non testé sur appareil.
+- Release v0.7.0 demandée par l'utilisateur (versionCode 8) ; non testé sur appareil.
