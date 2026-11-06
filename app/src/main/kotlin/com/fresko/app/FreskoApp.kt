@@ -2,13 +2,15 @@ package com.fresko.app
 
 import android.app.Application
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.fresko.feature.checker.CheckerWorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class FreskoApp : Application(), Configuration.Provider {
+class FreskoApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     lateinit var container: AppContainer
         private set
@@ -32,4 +34,8 @@ class FreskoApp : Application(), Configuration.Provider {
             .setWorkerFactory(CheckerWorkerFactory { container.checkerDependencies() })
             .setMinimumLoggingLevel(android.util.Log.INFO)
             .build()
+
+    /** Couvertures chargées avec les cookies et le User-Agent de l'app (voir [AppContainer.imageClient]). */
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this).okHttpClient { container.imageClient }.build()
 }

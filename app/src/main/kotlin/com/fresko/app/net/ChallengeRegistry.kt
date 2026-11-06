@@ -13,6 +13,13 @@ class ChallengeRegistry(context: Context) {
 
     private val prefs = context.applicationContext.getSharedPreferences("challenges", Context.MODE_PRIVATE)
 
+    init {
+        // Domaines abandonnés par les sources : leurs vérifications en attente ne seraient
+        // jamais effacées (plus aucune requête vers eux).
+        val stale = prefs.all.keys.filter { k -> OBSOLETE_HOSTS.any { k.endsWith("_$it") } }
+        if (stale.isNotEmpty()) prefs.edit().apply { stale.forEach { remove(it) } }.apply()
+    }
+
     private val _pending = MutableStateFlow(load())
     val pending: StateFlow<Map<String, String>> = _pending
 
@@ -61,6 +68,8 @@ class ChallengeRegistry(context: Context) {
         private const val NOTIFIED = "notified_"
         private const val HEADLESS_COOLDOWN = 30 * 60 * 1000L
         private const val NOTIFY_COOLDOWN = 6 * 3600 * 1000L
+        /** NatoManga : www.natomanga.com → www.manganami.com (constaté le 2026-11-06). */
+        private val OBSOLETE_HOSTS = setOf("www.natomanga.com", "natomanga.com")
 
         fun hostOf(url: String): String? = runCatching { URI(url).host }.getOrNull()
 

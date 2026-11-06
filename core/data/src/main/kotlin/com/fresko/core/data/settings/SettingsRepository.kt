@@ -28,7 +28,11 @@ data class Settings(
     /** Nom lisible du dossier de sauvegarde choisi. */
     val backupFolderLabel: String? = null,
     val lastBackupAt: Long? = null,
+    /** Échec global du dernier check, par source (effacé au check réussi suivant). */
+    val sourceErrors: Map<SourceId, SourceError> = emptyMap(),
 )
+
+data class SourceError(val message: String, val atMillis: Long)
 
 /**
  * Réglages utilisateur + état du check, stockés dans DataStore.
@@ -93,6 +97,21 @@ class SettingsRepository(
         store.edit {
             it[lastSuccessKey(sourceId)] = cursor.sinceMillis
             it[anchorsKey(sourceId)] = cursor.anchors
+            it.remove(errorKey(sourceId))
+            it.remove(errorAtKey(sourceId))
+        }
+    }
+
+    override suspend fun saveSourceError(sourceId: SourceId, message: String?, atMillis: Long) {
+        if (message == null && store.data.first()[errorKey(sourceId)] == null) return // rien à effacer
+        store.edit {
+            if (message == null) {
+                it.remove(errorKey(sourceId))
+                it.remove(errorAtKey(sourceId))
+            } else {
+                it[errorKey(sourceId)] = message
+                it[errorAtKey(sourceId)] = atMillis
+            }
         }
     }
 
@@ -107,6 +126,9 @@ class SettingsRepository(
             backupFileUri = this[BACKUP_URI],
             backupFolderLabel = this[BACKUP_LABEL],
             lastBackupAt = this[LAST_BACKUP],
+            sourceErrors = allSourceIds.mapNotNull { id ->
+                this[errorKey(id)]?.let { id to SourceError(it, this[errorAtKey(id)] ?: 0L) }
+            }.toMap(),
         )
     }
 
@@ -121,6 +143,8 @@ class SettingsRepository(
         private val LAST_BACKUP = longPreferencesKey("last_backup_at")
         private val INTERVAL = intPreferencesKey("interval_minutes")
         private fun lastSuccessKey(id: SourceId) = longPreferencesKey("last_success_${id.value}")
+        private fun errorKey(id: SourceId) = stringPreferencesKey("check_error_${id.value}")
+        private fun errorAtKey(id: SourceId) = longPreferencesKey("check_error_at_${id.value}")
         private fun anchorsKey(id: SourceId) = stringSetPreferencesKey("anchors_${id.value}")
     }
 }

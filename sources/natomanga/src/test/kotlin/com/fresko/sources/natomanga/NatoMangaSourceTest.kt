@@ -8,7 +8,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Fixtures = réponses réelles capturées le 2026-10-16 (recherche tronquée à 2 résultats). */
+/**
+ * Fixtures = réponses réelles capturées le 2026-10-16 sur www.natomanga.com (recherche tronquée
+ * à 2 résultats) : les liens absolus de la page de recherche portent donc l'ancien domaine.
+ */
 class NatoMangaSourceTest {
 
     private fun resource(name: String) = javaClass.classLoader!!.getResource(name)!!.readText()
@@ -32,7 +35,7 @@ class NatoMangaSourceTest {
     fun `recherche - titre, cle, couverture, dernier chapitre date`() = runTest {
         val http = FakeHttp { resource("search.html") }
         val results = NatoMangaSource(http).search("solo max level")
-        assertEquals("https://www.natomanga.com/search/story/solo_max_level", http.calls.single())
+        assertEquals("https://www.manganami.com/search/story/solo_max_level", http.calls.single())
         assertEquals(2, results.size)
         val solo = results[0]
         assertEquals(WorkKey(NatoMangaSource.ID, "solo-max-level-newbie"), solo.key)
@@ -50,9 +53,9 @@ class NatoMangaSourceTest {
     fun `dernier chapitre via l'API`() = runTest {
         val http = FakeHttp { resource("chapters.json") }
         val ch = NatoMangaSource(http).fetchLatestChapter(WorkKey(NatoMangaSource.ID, "solo-max-level-newbie"))!!
-        assertEquals("https://www.natomanga.com/api/manga/solo-max-level-newbie/chapters?limit=3", http.calls.single())
+        assertEquals("https://www.manganami.com/api/manga/solo-max-level-newbie/chapters?limit=3", http.calls.single())
         assertEquals(279.0, ch.number!!, 0.0)
-        assertEquals("https://www.natomanga.com/manga/solo-max-level-newbie/chapter-279", ch.url)
+        assertEquals("https://www.manganami.com/manga/solo-max-level-newbie/chapter-279", ch.url)
         assertEquals(java.time.Instant.parse("2026-10-14T08:11:20Z").toEpochMilli(), ch.publishedAtMillis)
         assertFalse(ch.isEarlyAccess)
     }

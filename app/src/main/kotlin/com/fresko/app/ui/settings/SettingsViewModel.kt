@@ -20,6 +20,8 @@ data class SourceSetting(
     val enabled: Boolean,
     val lastSuccess: Long?,
     val trackedCount: Int = 0,
+    /** Échec global du dernier check de la source. */
+    val error: String? = null,
 )
 
 data class BackupUi(
@@ -55,7 +57,10 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
                 error = backupError,
             ),
             sources = c.sources.all.map {
-                SourceSetting(it.id, it.displayName, it.id in s.enabledSources, s.lastSuccessBySource[it.id], counts[it.id] ?: 0)
+                SourceSetting(
+                    it.id, it.displayName, it.id in s.enabledSources, s.lastSuccessBySource[it.id], counts[it.id] ?: 0,
+                    error = s.sourceErrors[it.id]?.message,
+                )
             },
             intervalMinutes = s.intervalMinutes,
         )

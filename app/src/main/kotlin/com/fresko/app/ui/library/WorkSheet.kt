@@ -105,6 +105,27 @@ fun WorkSheet(
                 }
             }
 
+            e.checkError?.let { err ->
+                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.errorContainer) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(
+                            "DERNIÈRE VÉRIFICATION EN ÉCHEC",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(err, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            (e.checkErrorAt?.let { "Échec " + relativeTime(it) + ". " } ?: "") +
+                                "Nouvel essai à chaque check ; le chapitre affiché peut ne pas être le dernier.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+            }
+
             if (item.source.hasEarlyAccess) {
                 Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

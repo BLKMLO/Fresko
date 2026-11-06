@@ -21,6 +21,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,7 +35,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.fresko.core.model.SourceId
+
+/** Referer des couvertures par source (fourni par l'activité ; vide dans les captures). */
+val LocalCoverReferers = staticCompositionLocalOf<Map<SourceId, String>> { emptyMap() }
 
 /** Couverture avec repli élégant (dégradé + initiale) pendant le chargement ou sans image. */
 @Composable
@@ -58,8 +65,15 @@ fun Cover(
             color = Color.White.copy(alpha = 0.9f),
         )
         if (url != null) {
+            val referer = LocalCoverReferers.current[sourceId]
+            val context = LocalContext.current
+            val request = remember(url, referer) {
+                ImageRequest.Builder(context).data(url)
+                    .apply { if (referer != null) setHeader("Referer", referer) }
+                    .build()
+            }
             AsyncImage(
-                model = url,
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

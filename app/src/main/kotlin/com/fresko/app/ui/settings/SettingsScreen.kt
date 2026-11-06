@@ -161,6 +161,13 @@ fun SettingsContent(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (s.enabled && s.error != null) {
+                                Text(
+                                    "Dernier check en échec : ${s.error}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                         Switch(checked = s.enabled, onCheckedChange = { onToggleSource(s.id, it) })
                     }

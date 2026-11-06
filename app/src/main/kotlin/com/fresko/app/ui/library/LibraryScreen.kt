@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -151,6 +152,26 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                 for ((host, url) in state.pendingChallenges) {
                     item(key = "challenge:$host") { ChallengeBanner(host, onSolve = { actions.onSolveChallenge(url) }) }
                 }
+                if (!state.isSearching) {
+                    for (err in state.sourceErrors) {
+                        item(key = "srcerr:" + err.source.id.value) {
+                            ErrorBanner(
+                                "Vérification de ${err.source.name} impossible",
+                                err.message + " Dernier essai " + relativeTime(err.atMillis) + ".",
+                            )
+                        }
+                    }
+                    if (state.worksInError > 0) {
+                        val n = state.worksInError
+                        item(key = "workerr") {
+                            ErrorBanner(
+                                "$n œuvre${if (n > 1) "s" else ""} non vérifiée${if (n > 1) "s" else ""}",
+                                "Le site n'a pas renvoyé ${if (n > 1) "ces œuvres" else "cette œuvre"} lors du " +
+                                    "dernier check (détail sur la carte). Nouvel essai à chaque check.",
+                            )
+                        }
+                    }
+                }
                 item(key = "search") {
                     SearchField(
                         query = state.query,
@@ -264,6 +285,27 @@ private fun LazyListScope.searchResults(
                     onOpenTracked = { onSelect(result.info.key) },
                     modifier = Modifier.animateItem(),
                 )
+            }
+        }
+    }
+}
+
+/** Échec de vérification (source entière ou œuvres) : les nouveautés peuvent manquer. */
+@Composable
+private fun ErrorBanner(title: String, text: String) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.Warning, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp),
+            )
+            Column(Modifier.padding(start = 12.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
     }
@@ -414,6 +456,22 @@ private fun TrackedCard(item: TrackedItem, onClick: () -> Unit, modifier: Modifi
                     if (e.chapterEarlyAccess) {
                         Spacer(Modifier.width(8.dp))
                         EarlyAccessBadge()
+                    }
+                }
+                e.checkError?.let { err ->
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.Warning, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            " Non vérifiée : $err",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
                 if (item.source.hasEarlyAccess && !e.notifyEarlyAccess) {

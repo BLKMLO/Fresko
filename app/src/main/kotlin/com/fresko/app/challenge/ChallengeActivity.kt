@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fresko.app.FreskoApp
 import com.fresko.app.net.ChallengeRegistry
+import com.fresko.app.net.ClearanceWatch
 import com.fresko.app.net.WebUserAgent
 import com.fresko.app.net.WebViewCookieJar
 import com.fresko.app.ui.theme.FreskoTheme
@@ -55,7 +56,8 @@ class ChallengeActivity : ComponentActivity() {
         val url = intent.getStringExtra(EXTRA_URL) ?: return finish()
         val container = (application as FreskoApp).container
         val cookies = container.cookies
-        val before = cookies.value(url, WebViewCookieJar.CLEARANCE)
+        // Surveille aussi les domaines atteints par redirection (cookie déposé sur le domaine final).
+        val watch = ClearanceWatch { cookies.value(it, WebViewCookieJar.CLEARANCE) }.apply { observe(url) }
         val host = ChallengeRegistry.hostOf(url) ?: url
 
         setContent {
@@ -64,8 +66,7 @@ class ChallengeActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     while (true) {
                         delay(700)
-                        val now = cookies.value(url, WebViewCookieJar.CLEARANCE)
-                        if (now != null && now != before) {
+                        if (watch.solvedRoot() != null) {
                             cookies.flush()
                             container.challenges.clear(url)
                             setResult(Activity.RESULT_OK)
@@ -105,7 +106,12 @@ class ChallengeActivity : ComponentActivity() {
                                     settings.domStorageEnabled = true
                                     settings.userAgentString = WebUserAgent.get(ctx)
                                     webViewClient = object : WebViewClient() {
+                                        override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) {
+                                            watch.observe(u)
+                                        }
+
                                         override fun onPageFinished(view: WebView?, u: String?) {
+                                            watch.observe(u)
                                             loading = false
                                         }
                                     }

@@ -20,7 +20,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * NatoManga / MangaNato (www.natomanga.com). Observé le 2026-10-16 :
+ * NatoManga / MangaNato. Depuis (au plus tard) le 2026-11-06, www.natomanga.com répond
+ * 301 vers **www.manganami.com** (même site, mêmes slugs, mêmes API) : on appelle
+ * directement le nouveau domaine, sinon le cookie anti-robot `cf_clearance` obtenu dans
+ * la WebView (déposé sur le domaine final) n'était pas retrouvé par l'app.
+ * Observé le 2026-10-16 :
  * - recherche : GET /search/story/{requête_en_snake_case} (HTML, `div.story_item`) ;
  * - chapitres : GET /api/manga/{slug}/chapters?limit=N (JSON, dates UTC précises).
  *
@@ -31,11 +35,12 @@ import java.util.Locale
  */
 class NatoMangaSource(
     private val http: HttpFetcher,
-    private val baseUrl: String = "https://www.natomanga.com",
+    private val baseUrl: String = BASE_URL,
 ) : Source {
 
     override val id = ID
     override val displayName = "NatoManga"
+    override val imageReferer = "$baseUrl/"
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -107,6 +112,7 @@ class NatoMangaSource(
 
     companion object {
         val ID = SourceId("natomanga")
+        const val BASE_URL = "https://www.manganami.com"
         private const val CHAPTERS_LIMIT = 3
         private val NUMBER = Regex("""\d+(\.\d+)?""")
         private val SEPARATORS = Regex("[!@%^*()+=<>?/,.:;'\" &#\\[\\]~\\-${'$'}_]")

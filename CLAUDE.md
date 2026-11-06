@@ -15,7 +15,7 @@ Depuis la v0.2.0, **la recherche est le seul moyen de trouver une œuvre** (plus
 ```
 app/                 UI Compose (écran suivis+recherche, fiche œuvre, réglages), thème, câblage (AppContainer), SourceRegistry
 feature/checker/     WorkManager : CheckWorker, CheckScheduler, ChapterNotifier (Android)
-core/data/           Room (œuvres suivies, schéma v3) + DataStore (réglages, curseurs de check) (Android)
+core/data/           Room (œuvres suivies, schéma v4) + DataStore (réglages, curseurs de check) (Android)
 core/domain/         UpdateChecker : logique du check, pure Kotlin, testée
 core/source/         Interface Source + UpdateCursor/RecentUpdates (pure Kotlin)
 core/network/        HttpFetcher (interface) + OkHttpFetcher (pure Kotlin)
@@ -85,6 +85,15 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
      se ferme dès qu'un nouveau `cf_clearance` apparaît (puis recherche + check relancés).
    - Tests Robolectric `ChallengeAwareFetcherTest` (6) ; `robolectric.dependency.repo.url`
      pointe désormais toujours vers le miroir Google de Maven Central.
+10. **Erreurs de check** (v0.7.0, non publiée en release à ce jour) : un échec de la requête dédiée à
+   une œuvre (exception, ou source qui ne renvoie aucun chapitre) est enregistré sur l'œuvre
+   (`check_error`, `check_error_at`, Room v4) ; l'œuvre est réinterrogée à chaque check tant
+   que l'erreur persiste, et l'erreur s'efface dès qu'elle est revue. Échec global d'une source
+   (liste des mises à jour) : DataStore `check_error_<source>`, effacé par `saveCursor`.
+   Messages : `CheckErrors` (core/domain). Affichage : ligne rouge sur la carte, bloc dans la
+   fiche, bandeaux sur l'accueil, ligne dans Réglages > Sources. **Avant la v0.7.0, ces erreurs
+   n'étaient que journalisées (Log.w), sauf les défis Cloudflare.** Pas de notification d'erreur.
+   Au suivi d'une œuvre, l'échec de la requête de référence est aussi enregistré.
 8. **Sauvegarde** (v0.5.0) : `BackupController` (app) écrit `fresko-sauvegarde.json`
    (format `BackupFile` v1 dans `core/domain/backup`, JSON lisible) dans un dossier choisi
    via le sélecteur Android (accès persistant), à chaque changement (anti-rebond 3 s,
@@ -120,7 +129,7 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
 | Demonic | (plus utilisé depuis v0.2.0) | `translationlist.php?list=N` (leurs traductions ; 525 œuvres le 2026-10-15) |
 | Demonic | recherche | `search.php?manga=…` |
 | Demonic | dernier chapitre | `/manga/{slug}` (`#chapters-list li a`) |
-| NatoManga | recherche | `https://www.natomanga.com/search/story/{alias}` (20 `div.story_item`, « Updated : Oct-14-2026 08:11 » en UTC) ; alias = `change_alias` de `/js/fsearch.js` |
+| NatoManga | recherche | `https://www.manganami.com/search/story/{alias}` (20 `div.story_item`, « Updated : Oct-14-2026 08:11 » en UTC) ; alias = `change_alias` de `/js/fsearch.js` |
 | NatoManga | dernier chapitre | `/api/manga/{slug}/chapters?limit=3` (JSON, `chapter_num`, `chapter_slug`, `updated_at` UTC ; slug inconnu → 400) |
 | NatoManga | URL chapitre | `/manga/{slug}/{chapter_slug}` |
 
@@ -130,8 +139,16 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
   activées en parallèle ; résultats en mémoire (seules les œuvres suivies sont en base).
 - La recherche Demonic ne fournit pas de dernier chapitre ; ses URL de vignettes
   contiennent des espaces bruts (encodés en `%20` par le parser).
+- **2026-11-06 : www.natomanga.com → 301 vers www.manganami.com** (mêmes slugs, mêmes API,
+  vérifié en réel : recherche + `/api/manga/{slug}/chapters`). L'app appelle directement
+  manganami (sinon `cf_clearance`, déposé sur le domaine final, n'était pas retrouvé :
+  l'écran de vérification ne se fermait pas). Migration Room 3→4 et restauration de
+  sauvegarde (`LegacyUrls`) réécrivent les URL ; vérifications en attente sur l'ancien hôte purgées.
+  `ClearanceWatch` surveille le cookie sur tous les domaines traversés par la WebView.
 - natomanga.com → 301 vers www.natomanga.com ; couvertures (`storage.waitst.com`,
-  `img-r*.2xstorage.com`) accessibles sans Referer (vérifié le 2026-10-16).
+  `img-r*.2xstorage.com`) accessibles sans Referer (vérifié le 2026-10-16, et de nouveau le 2026-11-06 depuis le
+  serveur). Depuis v0.7.0, Coil utilise le client OkHttp de l'app (cookies WebView + même
+  User-Agent) et envoie `Source.imageReferer` (NatoManga : le site).
 - Asura : 353 séries chargées par l'app lors du test réel du 2026-10-15 (`meta.total` annonçait 354).
 - Chapitres Asura `is_premium` / `early_access_until` : notifiés avec la mention « accès anticipé ».
 
@@ -200,6 +217,8 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   un défi et ne se résout pas ; l'écran de vérification l'affichera tel quel.
 - Le SAF ne permet pas de choisir la racine de « Téléchargements » ni du stockage
   (Android 11+) : il faut un sous-dossier.
+- Plusieurs sources pour une même œuvre : options proposées le 2026-11-06, en attente du choix
+  de l'utilisateur (rien d'implémenté).
 - Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
   des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic,
   marquer lu depuis la notification.
@@ -307,3 +326,18 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   notification. 52 tests unitaires distincts (dont 6 Robolectric pour le mécanisme).
 - Non vérifiable ici : comportement réel de Cloudflare sur le téléphone (le serveur de dev
   n'est jamais challengé) et durée de validité du cookie (fixée par le site).
+
+### 2026-11-06 — Session 9 : erreurs de check, NatoManga (domaine, couvertures)
+- Demandes : plusieurs sources pour une même œuvre (propositions demandées, pas
+  d'implémentation) ; couvertures NatoManga absentes ; confirmer qu'une erreur s'affiche si la
+  requête dédiée n'arrive pas à récupérer l'œuvre.
+- Constat : **aucune erreur n'était affichée** (seulement `Log.w`, et notification pour les
+  défis Cloudflare). Ajout de l'affichage (voir « Erreurs de check ») ; 4 tests domaine.
+- Constat : natomanga.com redirige vers manganami.com → `baseUrl` changée, migration Room v4,
+  détection du cookie anti-robot sur le domaine final (3 tests `ClearanceWatch`), purge des
+  vérifications en attente de l'ancien hôte (1 test), sauvegardes anciennes normalisées (1 test).
+- Couvertures : non reproductible depuis le serveur (images en 200, WebP valides). Correctif
+  appliqué sur l'hypothèse la plus probable : Coil utilisait son propre client (UA « okhttp »,
+  sans cookie) ; il passe par le client de l'app + Referer du site. **Non vérifié sur appareil.**
+- 60 tests unitaires distincts, 0 échec ; `assembleDebug` OK ; migration 3→4 rejouée sur SQLite
+  (schéma identique à 4.json) ; test de fumée réel NatoManga (20 résultats, chapitre via l'API).

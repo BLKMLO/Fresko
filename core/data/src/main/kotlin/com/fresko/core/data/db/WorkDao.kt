@@ -59,4 +59,7 @@ interface WorkDao {
 
     @Query("UPDATE works SET early_pending = :pending WHERE source_id = :sourceId AND work_key = :key")
     suspend fun setEarlyPending(sourceId: String, key: String, pending: Boolean)
+
+    @Query("UPDATE works SET check_error = :message, check_error_at = :at WHERE source_id = :sourceId AND work_key = :key")
+    suspend fun setCheckError(sourceId: String, key: String, message: String?, at: Long?)
 }

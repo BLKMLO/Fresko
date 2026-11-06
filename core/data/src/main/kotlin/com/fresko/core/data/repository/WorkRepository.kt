@@ -68,6 +68,9 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
             chapter.publishedAtMillis, chapter.isEarlyAccess, checkedAtMillis,
         )
 
+    override suspend fun setCheckError(key: WorkKey, message: String?, atMillis: Long) =
+        dao.setCheckError(key.sourceId.value, key.key, message, if (message == null) null else atMillis)
+
     override suspend fun setEarlyPending(key: WorkKey, pending: Boolean) =
         dao.setEarlyPending(key.sourceId.value, key.key, pending)
 }

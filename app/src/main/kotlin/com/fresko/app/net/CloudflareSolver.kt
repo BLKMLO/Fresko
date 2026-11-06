@@ -31,16 +31,13 @@ class CloudflareSolver(
     override suspend fun solveHeadless(url: String): Boolean = solveHeadless(url, 30_000)
 
     suspend fun solveHeadless(url: String, timeoutMs: Long): Boolean = mutex.withLock {
-        val before = cookies.value(url, WebViewCookieJar.CLEARANCE)
+        val watch = ClearanceWatch { cookies.value(it, WebViewCookieJar.CLEARANCE) }
+        watch.observe(url)
         var webView: WebView? = null
         try {
-            withContext(Dispatchers.Main) { webView = createWebView().apply { loadUrl(url) } }
+            withContext(Dispatchers.Main) { webView = createWebView(watch).apply { loadUrl(url) } }
             val solved = withTimeoutOrNull(timeoutMs) {
-                var now: String? = before
-                while (now == null || now == before) {
-                    delay(500)
-                    now = cookies.value(url, WebViewCookieJar.CLEARANCE)
-                }
+                while (watch.solvedRoot() == null) delay(500)
                 true
             } ?: false
             if (solved) cookies.flush()
@@ -55,10 +52,13 @@ class CloudflareSolver(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView() = WebView(appContext).apply {
+    private fun createWebView(watch: ClearanceWatch) = WebView(appContext).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.userAgentString = WebUserAgent.get(appContext)
-        webViewClient = WebViewClient()
+        webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) = watch.observe(u)
+            override fun onPageFinished(view: WebView?, u: String?) = watch.observe(u)
+        }
     }
 }

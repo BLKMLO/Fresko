@@ -21,6 +21,11 @@ import kotlinx.coroutines.CancellationException
  *
  * Une œuvre sans chapitre connu est simplement initialisée (pas de notification).
  *
+ * Erreurs : l'échec de la requête dédiée à une œuvre (site en erreur, œuvre introuvable,
+ * aucun chapitre renvoyé) est mémorisé sur l'œuvre ([TrackedWorksStore.setCheckError]) pour
+ * être affiché, et l'œuvre est réinterrogée aux checks suivants jusqu'à réussite ; l'échec
+ * global d'une source est mémorisé par [CheckStateStore.saveSourceError].
+ *
  * Accès anticipé désactivé pour une œuvre ([TrackedWork.notifyEarlyAccess] = false) :
  * ces chapitres sont ignorés ; tant qu'un chapitre ignoré n'est pas devenu gratuit
  * ([TrackedWork.earlyPending]), l'œuvre est vérifiée individuellement (le passage en
@@ -43,11 +48,14 @@ class UpdateChecker(
                 newChapters += checkSource(source)
             } catch (e: PartialCheckException) {
                 // Les chapitres trouvés sont déjà enregistrés : il faut les notifier.
+                // Les œuvres en échec portent leur propre erreur ; la source, elle, a répondu.
                 newChapters += e.found
                 errors[source.id] = e.cause ?: e
+                state.saveSourceError(source.id, null, clock())
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
                 errors[source.id] = e
+                state.saveSourceError(source.id, CheckErrors.describe(e), clock())
             }
         }
         return CheckReport(newChapters, errors)
@@ -69,16 +77,25 @@ class UpdateChecker(
             val known = work.lastKnownChapter
             val recent = updates.recentByKey[work.key]
             var latest = recent?.firstOrNull { allowEarly || !it.isEarlyAccess }
+            // Une œuvre en erreur est réinterrogée à chaque check jusqu'à ce que ça passe.
             val needFetch = latest == null &&
-                (!fullyCovered || known == null || (!allowEarly && work.earlyPending))
+                (!fullyCovered || known == null || (!allowEarly && work.earlyPending) || work.checkError != null)
+            var workError: String? = null
             if (needFetch) {
                 latest = try {
-                    source.fetchLatestChapter(work.key)?.takeIf { allowEarly || !it.isEarlyAccess }
+                    val fetched = source.fetchLatestChapter(work.key)
+                    if (fetched == null) workError = CheckErrors.NO_CHAPTER
+                    fetched?.takeIf { allowEarly || !it.isEarlyAccess }
                 } catch (e: Throwable) {
                     if (e is CancellationException) throw e
                     if (firstError == null) firstError = e
+                    workError = CheckErrors.describe(e)
                     null
                 }
+            }
+            // L'œuvre a été vue (page de mises à jour ou requête dédiée) : on met son état à jour.
+            if ((needFetch || latest != null) && workError != work.checkError) {
+                works.setCheckError(work.key, workError, startedAt)
             }
 
             var newKnown = known

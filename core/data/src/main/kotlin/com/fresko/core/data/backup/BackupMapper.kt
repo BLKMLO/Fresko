@@ -1,5 +1,6 @@
 package com.fresko.core.data.backup
 
+import com.fresko.core.data.db.LegacyUrls
 import com.fresko.core.data.db.WorkEntity
 import com.fresko.core.domain.backup.BackupChapter
 import com.fresko.core.domain.backup.BackupWork
@@ -25,20 +26,21 @@ object BackupMapper {
         notifyEarlyAccess = e.notifyEarlyAccess,
     )
 
+    /** Les URL d'anciens domaines (sauvegardes antérieures) sont mises à jour ([LegacyUrls]). */
     fun toEntity(w: BackupWork) = WorkEntity(
         sourceId = w.source,
         workKey = w.key,
         title = w.title,
-        url = w.url,
+        url = LegacyUrls.normalize(w.source, w.url)!!,
         coverUrl = w.cover,
         tracked = true,
         trackedAt = w.trackedAt,
         chapterNumber = w.chapter?.number,
         chapterLabel = w.chapter?.label,
-        chapterUrl = w.chapter?.url,
+        chapterUrl = LegacyUrls.normalize(w.source, w.chapter?.url),
         chapterPublishedAt = w.chapter?.publishedAt,
         chapterEarlyAccess = w.chapter?.earlyAccess ?: false,
         notifyEarlyAccess = w.notifyEarlyAccess,
-        readChapterUrl = w.readChapterUrl,
+        readChapterUrl = LegacyUrls.normalize(w.source, w.readChapterUrl),
     )
 }

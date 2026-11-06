@@ -26,21 +26,28 @@ class UpdateCheckerTest {
         var recent: RecentUpdates,
         val perWork: Map<WorkKey, ChapterInfo> = emptyMap(),
         val failPerWork: Boolean = false,
+        val failRecent: Boolean = false,
+        val perWorkError: Throwable = IOException("réseau"),
     ) : Source {
         override val displayName = "Fake"
         val perWorkCalls = mutableListOf<WorkKey>()
         override suspend fun search(query: String) = emptyList<WorkInfo>()
         override suspend fun fetchLatestChapter(key: WorkKey): ChapterInfo? {
             perWorkCalls += key
-            if (failPerWork) throw IOException("réseau")
+            if (failPerWork) throw perWorkError
             return perWork[key]
         }
-        override suspend fun fetchRecentUpdates(cursor: UpdateCursor?) = recent
+        override suspend fun fetchRecentUpdates(cursor: UpdateCursor?): RecentUpdates {
+            if (failRecent) throw IOException("liste")
+            return recent
+        }
     }
 
     private class Store(initial: List<TrackedWork>) : TrackedWorksStore, CheckStateStore, EnabledSourcesProvider {
         val works = initial.associateBy { it.key }.toMutableMap()
         val cursors = mutableMapOf<SourceId, UpdateCursor>()
+        val sourceErrors = mutableMapOf<SourceId, String>()
+        var errorWrites = 0
         var enabledIds: Set<SourceId> = initial.map { it.key.sourceId }.toSet()
         override suspend fun trackedWorks(sourceId: SourceId) = works.values.filter { it.key.sourceId == sourceId }
         override suspend fun saveLatestChapter(key: WorkKey, chapter: ChapterInfo, checkedAtMillis: Long) {
@@ -49,13 +56,24 @@ class UpdateCheckerTest {
         override suspend fun setEarlyPending(key: WorkKey, pending: Boolean) {
             works[key] = works.getValue(key).copy(earlyPending = pending)
         }
+        override suspend fun setCheckError(key: WorkKey, message: String?, atMillis: Long) {
+            errorWrites++
+            works[key] = works.getValue(key).copy(checkError = message)
+        }
         override suspend fun cursor(sourceId: SourceId) = cursors[sourceId]
-        override suspend fun saveCursor(sourceId: SourceId, cursor: UpdateCursor) { cursors[sourceId] = cursor }
+        override suspend fun saveCursor(sourceId: SourceId, cursor: UpdateCursor) {
+            cursors[sourceId] = cursor
+            sourceErrors.remove(sourceId)
+        }
+        override suspend fun saveSourceError(sourceId: SourceId, message: String?, atMillis: Long) {
+            if (message == null) sourceErrors.remove(sourceId) else sourceErrors[sourceId] = message
+        }
         override suspend fun enabledSourceIds() = enabledIds
     }
 
-    private fun tracked(k: String, known: ChapterInfo?, early: Boolean = true, pending: Boolean = false) =
-        TrackedWork(key(k), k, "https://x/$k", known, notifyEarlyAccess = early, earlyPending = pending)
+    private fun tracked(
+        k: String, known: ChapterInfo?, early: Boolean = true, pending: Boolean = false, error: String? = null,
+    ) = TrackedWork(key(k), k, "https://x/$k", known, notifyEarlyAccess = early, earlyPending = pending, checkError = error)
 
     @Test
     fun `nouveau chapitre detecte depuis les mises a jour recentes`() = runTest {
@@ -175,5 +193,53 @@ class UpdateCheckerTest {
         val report = UpdateChecker(listOf(source), store, store, store).check()
         assertTrue(report.newChapters.isEmpty())
         assertTrue(store.works.getValue(key("a")).earlyPending)
+    }
+
+    @Test
+    fun `requete dediee en echec - erreur memorisee sur l'oeuvre`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0))))
+        val source = FakeSource(
+            src, RecentUpdates(emptyMap(), false), failPerWork = true,
+            perWorkError = com.fresko.core.network.HttpException(400, "https://x/api/a"),
+        )
+        UpdateChecker(listOf(source), store, store, store).check()
+        val error = store.works.getValue(key("a")).checkError!!
+        assertTrue(error, error.contains("introuvable") && error.contains("400"))
+        assertTrue(store.cursors.isEmpty())
+    }
+
+    @Test
+    fun `aucun chapitre renvoye - erreur affichee, oeuvre reinterrogee meme si la periode est couverte`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0)))).apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        val source = FakeSource(src, RecentUpdates(emptyMap(), coversCursor = false))
+        UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(CheckErrors.NO_CHAPTER, store.works.getValue(key("a")).checkError)
+        // Période couverte ensuite : l'œuvre en erreur est quand même réinterrogée.
+        source.recent = RecentUpdates(emptyMap(), coversCursor = true)
+        UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(listOf(key("a"), key("a")), source.perWorkCalls)
+    }
+
+    @Test
+    fun `oeuvre de nouveau verifiee - erreur effacee, sans ecriture inutile ensuite`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0), error = "ancienne erreur")))
+            .apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        val source = FakeSource(src, RecentUpdates(emptyMap(), coversCursor = true), perWork = mapOf(key("a") to ch(1.0)))
+        UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(null, store.works.getValue(key("a")).checkError)
+        assertEquals(1, store.errorWrites)
+        UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(1, store.errorWrites)
+    }
+
+    @Test
+    fun `echec global d'une source - erreur de source memorisee puis effacee au check reussi`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0))))
+        val failing = FakeSource(src, RecentUpdates(emptyMap(), false), failRecent = true)
+        UpdateChecker(listOf(failing), store, store, store).check()
+        assertTrue(store.sourceErrors.getValue(src).startsWith("Problème réseau"))
+        val ok = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to ch(1.0)))
+        UpdateChecker(listOf(ok), store, store, store).check()
+        assertTrue(store.sourceErrors.isEmpty())
     }
 }

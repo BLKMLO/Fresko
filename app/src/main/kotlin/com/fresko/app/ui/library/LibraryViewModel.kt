@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fresko.app.AppContainer
 import com.fresko.core.data.db.WorkEntity
+import com.fresko.core.domain.CheckErrors
 import com.fresko.core.model.SourceId
 import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
@@ -29,6 +30,8 @@ import kotlinx.coroutines.launch
 data class SourceUi(val id: SourceId, val name: String, val hasEarlyAccess: Boolean)
 
 data class TrackedItem(val entity: WorkEntity, val source: SourceUi)
+
+data class SourceCheckError(val source: SourceUi, val message: String, val atMillis: Long)
 
 data class SearchResultItem(val info: WorkInfo, val tracked: Boolean)
 
@@ -56,7 +59,12 @@ data class LibraryUiState(
     val hiddenCount: Int = 0,
     /** Vérifications anti-robot en attente : hôte → page à ouvrir. */
     val pendingChallenges: Map<String, String> = emptyMap(),
+    /** Sources dont le dernier check a échoué entièrement (message lisible, instant). */
+    val sourceErrors: List<SourceCheckError> = emptyList(),
 ) {
+    /** Œuvres dont la dernière vérification a échoué. */
+    val worksInError: Int get() = tracked.count { it.entity.checkError != null }
+
     val isSearching: Boolean get() = query.trim().length >= MIN_QUERY
     val toRead: List<TrackedItem> get() = tracked.filter { it.entity.isUnread }
     val upToDate: List<TrackedItem> get() = tracked.filterNot { it.entity.isUnread }
@@ -119,6 +127,9 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             checking = checking,
             hiddenCount = works.count { SourceId(it.sourceId) !in enabledIds },
             pendingChallenges = challenges,
+            sourceErrors = enabled.mapNotNull { s ->
+                settings.sourceErrors[s.id]?.let { SourceCheckError(s, it.message, it.atMillis) }
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -149,10 +160,23 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             // Référence fraîche pour ne pas notifier un chapitre déjà sorti ; on garde
             // le plus récent (l'endpoint dédié d'Asura omet l'accès anticipé).
             val source = c.sources[info.key.sourceId] ?: return@launch
-            val fetched = runCatching { source.fetchLatestChapter(info.key) }.getOrNull() ?: return@launch
+            val now = System.currentTimeMillis()
+            val fetched = try {
+                source.fetchLatestChapter(info.key)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Affiché sur la carte ; le check réessaiera cette œuvre jusqu'à réussite.
+                c.works.setCheckError(info.key, CheckErrors.describe(e), now)
+                return@launch
+            }
+            if (fetched == null) {
+                c.works.setCheckError(info.key, CheckErrors.NO_CHAPTER, now)
+                return@launch
+            }
             val known = info.latestChapter
             if (known == null || fetched.isNewerThan(known)) {
-                c.works.saveLatestChapter(info.key, fetched, System.currentTimeMillis())
+                c.works.saveLatestChapter(info.key, fetched, now)
                 c.works.markRead(info.key) // la référence n'est pas une nouveauté
             }
         }

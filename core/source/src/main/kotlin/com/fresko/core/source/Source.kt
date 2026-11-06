@@ -17,6 +17,12 @@ interface Source {
     /** True si le site publie des chapitres en accès anticipé (payant / premium). */
     val hasEarlyAccess: Boolean get() = false
 
+    /**
+     * Referer à envoyer pour charger les couvertures (comme le ferait un navigateur sur le
+     * site), ou null pour n'en envoyer aucun.
+     */
+    val imageReferer: String? get() = null
+
     /** Recherche sur le site : c'est le seul moyen de trouver une œuvre à suivre. */
     suspend fun search(query: String): List<WorkInfo>
 

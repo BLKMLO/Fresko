@@ -31,6 +31,9 @@ data class WorkEntity(
     @ColumnInfo(name = "early_pending", defaultValue = "0") val earlyPending: Boolean = false,
     /** URL du dernier chapitre marqué comme lu (null = rien de lu). */
     @ColumnInfo(name = "read_chapter_url") val readChapterUrl: String? = null,
+    /** Échec de la dernière vérification dédiée (v0.7.0), null = vérifiée normalement. */
+    @ColumnInfo(name = "check_error") val checkError: String? = null,
+    @ColumnInfo(name = "check_error_at") val checkErrorAt: Long? = null,
 ) {
     /** Un chapitre plus récent que le dernier lu est disponible. */
     val isUnread: Boolean get() = chapterUrl != null && chapterUrl != readChapterUrl
@@ -46,5 +49,5 @@ data class WorkEntity(
             isEarlyAccess = chapterEarlyAccess,
         )
 
-    fun toTrackedWork() = TrackedWork(key, title, url, chapter, notifyEarlyAccess, earlyPending)
+    fun toTrackedWork() = TrackedWork(key, title, url, chapter, notifyEarlyAccess, earlyPending, checkError)
 }

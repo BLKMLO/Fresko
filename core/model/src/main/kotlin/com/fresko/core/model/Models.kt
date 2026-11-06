@@ -39,6 +39,7 @@ data class ChapterInfo(
  *   l'alerte arrive quand le chapitre devient gratuit.
  * @param earlyPending un chapitre en accès anticipé a été ignoré et n'est pas
  *   encore gratuit : l'œuvre est vérifiée individuellement à chaque check.
+ * @param checkError message de l'échec de la dernière requête dédiée à cette œuvre.
  */
 data class TrackedWork(
     val key: WorkKey,
@@ -47,6 +48,8 @@ data class TrackedWork(
     val lastKnownChapter: ChapterInfo?,
     val notifyEarlyAccess: Boolean = true,
     val earlyPending: Boolean = false,
+    /** Échec de la dernière vérification de cette œuvre (null = vérifiée normalement). */
+    val checkError: String? = null,
 )
 
 /** Nouveau chapitre détecté pour une œuvre suivie. */

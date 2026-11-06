@@ -9,6 +9,7 @@ import com.fresko.app.ui.library.LibraryActions
 import com.fresko.app.ui.library.LibraryContent
 import com.fresko.app.ui.library.LibraryUiState
 import com.fresko.app.ui.library.SearchResultItem
+import com.fresko.app.ui.library.SourceCheckError
 import com.fresko.app.ui.library.SourceSearch
 import com.fresko.app.ui.library.SourceUi
 import com.fresko.app.ui.library.TrackedItem
@@ -107,6 +108,25 @@ class ScreenshotTest {
 
     @Test fun libraryLight() = shot("1-library", dark = false) {
         LibraryContent(LibraryUiState(tracked = tracked, enabledSources = listOf(asura, demonic, nato), lastCheck = now - 4 * 60_000), LibraryActions())
+    }
+
+    /** Erreurs de check : source entière en échec + œuvre non récupérée par la requête dédiée. */
+    private val errorState = LibraryUiState(
+        tracked = tracked.mapIndexed { i, t ->
+            if (i == 1) t.copy(entity = t.entity.copy(
+                checkError = "Œuvre introuvable sur le site (code 400) : elle a peut-être été retirée ou renommée.",
+                checkErrorAt = now - 3 * 60_000,
+            )) else t
+        },
+        enabledSources = listOf(asura, demonic, nato),
+        lastCheck = now - 4 * 60_000,
+        sourceErrors = listOf(SourceCheckError(demonic, "Le site ne répond pas (délai dépassé).", now - 2 * 60_000)),
+    )
+
+    @Test fun errorsLight() = shot("7-errors", dark = false) { LibraryContent(errorState, LibraryActions()) }
+
+    @Test fun errorSheetDark() = shot("8-error-sheet", dark = true, multipleRoots = true) {
+        LibraryContent(errorState, LibraryActions(), initialSelection = errorState.tracked[1].entity.key)
     }
 
     @Test fun emptyDark() = shot("2-empty", dark = true) {
