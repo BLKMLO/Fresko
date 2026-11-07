@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +72,22 @@ fun WorkSheet(
     onUntrack: () -> Unit,
 ) {
     val e = item.entity
+    // Suppression demandée, en attente de confirmation.
+    var confirm by remember { mutableStateOf<PendingRemoval?>(null) }
+    confirm?.let { pending ->
+        ConfirmRemovalDialog(
+            pending = pending,
+            title = e.title,
+            onConfirm = {
+                confirm = null
+                when (pending) {
+                    is PendingRemoval.All -> onUntrack()
+                    is PendingRemoval.OneSource -> onRemoveSource(pending.member.entity.key)
+                }
+            },
+            onDismiss = { confirm = null },
+        )
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -153,7 +174,7 @@ fun WorkSheet(
                 }
             }
 
-            SourcesCard(item, onOpen, onToggleEarly, onRemoveSource, onAddSource)
+            SourcesCard(item, onOpen, onToggleEarly, { confirm = PendingRemoval.OneSource(it) }, onAddSource)
 
             Button(
                 onClick = {
@@ -185,7 +206,7 @@ fun WorkSheet(
                 }
             }
             TextButton(
-                onClick = onUntrack,
+                onClick = { confirm = PendingRemoval.All(item.members.size) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
             ) {
@@ -203,7 +224,7 @@ private fun SourcesCard(
     item: TrackedItem,
     onOpen: (String) -> Unit,
     onToggleEarly: (WorkKey, Boolean) -> Unit,
-    onRemoveSource: (WorkKey) -> Unit,
+    onRemoveSource: (Member) -> Unit,
     onAddSource: () -> Unit,
 ) {
     Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -241,7 +262,7 @@ private fun SourcesCard(
                     }
                     TextButton(onClick = { onOpen(me.chapterUrl ?: me.url) }) { Text("Ouvrir") }
                     if (item.isGroup) {
-                        IconButton(onClick = { onRemoveSource(me.key) }) {
+                        IconButton(onClick = { onRemoveSource(m) }) {
                             Icon(Icons.Filled.Close, contentDescription = "Retirer ${m.source.name}")
                         }
                     }
@@ -272,4 +293,45 @@ private fun SourcesCard(
             }
         }
     }
+}
+
+/** Suppression à confirmer : toute l'œuvre, ou une seule de ses sources. */
+private sealed interface PendingRemoval {
+    data class All(val sourceCount: Int) : PendingRemoval
+    data class OneSource(val member: Member) : PendingRemoval
+}
+
+@Composable
+private fun ConfirmRemovalDialog(
+    pending: PendingRemoval,
+    title: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val (heading, text, action) = when (pending) {
+        is PendingRemoval.All -> Triple(
+            "Ne plus suivre « $title » ?",
+            (if (pending.sourceCount > 1) "L'œuvre ne sera plus suivie sur aucune de ses ${pending.sourceCount} sources. " else "") +
+                "Vous ne recevrez plus d'alerte pour ses nouveaux chapitres. Pour la suivre à nouveau, il faudra la rechercher.",
+            "Ne plus suivre",
+        )
+        is PendingRemoval.OneSource -> Triple(
+            "Retirer ${pending.member.source.name} ?",
+            "« $title » ne sera plus vérifiée sur ${pending.member.source.name}. Les autres sources restent suivies.",
+            "Retirer",
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+        title = { Text(heading) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text(action) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+    )
 }

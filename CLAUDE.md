@@ -110,6 +110,7 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    UI : une carte par groupe (source en tête = chapitre le plus avancé, puis le plus ancien
    publié), toutes les pastilles, « Ch. N · Source ». Sauvegarde : champs optionnels `group`
    et `read_chapter_number` (format v1 inchangé, lisible par les anciennes versions).
+   Suppressions (« Ne plus suivre » et « × » d'une source) confirmées par un dialogue (v0.7.1).
    **Limite** : numérotations différentes entre sites non gérées (pas de décalage par source) ;
    les numéros de chaque source sont visibles dans la fiche.
 8. **Sauvegarde** (v0.5.0) : `BackupController` (app) écrit `fresko-sauvegarde.json`
@@ -373,3 +374,11 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   (numéro lu déduit d'une sauvegarde antérieure). 64 tests unitaires distincts, 0 échec ;
   `assembleDebug` et `assembleRelease` OK ; captures 9 (carte groupée), 10 (fiche), 11 (liaison).
 - Release v0.7.0 demandée par l'utilisateur (versionCode 8) ; non testé sur appareil.
+
+### 2026-11-07 — Session 11 : v0.7.1
+- Retour utilisateur sur la v0.7.0 : « pas de souci apparent ». Demande : confirmation avant
+  « Ne plus suivre », puis release mineure.
+- Fait : dialogue de confirmation (`WorkSheet`, `PendingRemoval`) pour « Ne plus suivre » et,
+  par cohérence, pour le retrait d'une source (« × »). Capture 12 (le test de capture accepte
+  désormais une interaction `interact` avant la prise). 64 tests, 0 échec ; `assembleRelease` OK.
+- Release v0.7.1 (versionCode 9).

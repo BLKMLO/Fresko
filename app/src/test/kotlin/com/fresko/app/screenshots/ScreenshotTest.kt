@@ -24,6 +24,8 @@ import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -69,10 +71,19 @@ class ScreenshotTest {
         work(asura, "raising", "Raising Villains the Right Way", 56.0, 4 * 24 * 60, read = true),
     )
 
-    private fun shot(name: String, dark: Boolean, multipleRoots: Boolean = false, content: @androidx.compose.runtime.Composable () -> Unit) {
+    private fun shot(
+        name: String,
+        dark: Boolean,
+        multipleRoots: Boolean = false,
+        interact: () -> Unit = {},
+        content: @androidx.compose.runtime.Composable () -> Unit,
+    ) {
         RuntimeEnvironment.setQualifiers(if (dark) "+night" else "+notnight")
         compose.activity.recreate()
         compose.setContent { FreskoTheme { content() } }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        interact()
         compose.mainClock.advanceTimeBy(1_000)
         compose.waitForIdle()
         // Toutes les fenêtres (activité + éventuelle feuille modale), dessinées l'une sur l'autre.
@@ -149,6 +160,16 @@ class ScreenshotTest {
     @Test fun groupLight() = shot("9-group", dark = false) { LibraryContent(groupState, LibraryActions()) }
 
     @Test fun groupSheetLight() = shot("10-group-sheet", dark = false, multipleRoots = true) {
+        LibraryContent(groupState, LibraryActions(), initialSelection = group.key)
+    }
+
+    @Test fun confirmUntrackLight() = shot(
+        "12-confirm-untrack", dark = false, multipleRoots = true,
+        interact = {
+            compose.onNode(androidx.compose.ui.test.hasText("Ne plus suivre (toutes les sources)"), useUnmergedTree = true)
+                .performScrollTo().performClick()
+        },
+    ) {
         LibraryContent(groupState, LibraryActions(), initialSelection = group.key)
     }
 
