@@ -228,6 +228,10 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 
 - `./gradlew test` (tests JVM), `./gradlew :app:assembleDebug|assembleRelease`.
 - AGP 8.7.3, Kotlin 2.1.0, Gradle 8.14.3, compileSdk/targetSdk 35, minSdk 26, JDK 17+.
+- **Branche** : un conteneur neuf peut s'ouvrir sur une branche `claude/…` au lieu de `main`
+  (2026-11-21). Vérifier `git branch` ; pousser avec `git push origin HEAD:main`. Ce jour-là,
+  un `git push origin main` a poussé un `main` local périmé et la release v1.0.0 est partie
+  sur le code v0.7.1 : run annulé avant publication (aucun tag créé), puis relancé.
 - Environnement Claude Code cloud : le conteneur peut être recréé entre deux sessions (SDK et
   script d'init perdus le 2026-11-21) → réinstaller : script ci-dessous, puis
   `commandlinetools-linux-11076708_latest.zip` (dl.google.com) dans
