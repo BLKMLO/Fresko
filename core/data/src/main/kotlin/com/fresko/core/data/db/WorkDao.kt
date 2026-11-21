@@ -101,4 +101,11 @@ interface WorkDao {
 
     @Query("UPDATE works SET check_error = :message, check_error_at = :at WHERE source_id = :sourceId AND work_key = :key")
     suspend fun setCheckError(sourceId: String, key: String, message: String?, at: Long?)
+
+    /** Un groupe réduit à une seule source n'en est plus un (après restauration, retrait…). */
+    @Query(
+        """UPDATE works SET group_id = NULL WHERE group_id IN
+           (SELECT group_id FROM works WHERE group_id IS NOT NULL GROUP BY group_id HAVING COUNT(*) = 1)"""
+    )
+    suspend fun dissolveSingletonGroups()
 }

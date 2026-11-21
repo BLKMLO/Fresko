@@ -29,7 +29,7 @@ class CheckWorker(
             if (chained && !isStopped) {
                 val interval = deps.intervalMinutes()
                 if (interval < CheckScheduler.PERIODIC_MIN_MINUTES) {
-                    deps.scheduler.scheduleNextInChain(interval)
+                    deps.scheduler.scheduleNextInChain(interval, deps.wifiOnly())
                 }
             }
         }
@@ -48,6 +48,8 @@ class CheckerDependencies(
     val notifier: ChapterNotifier,
     val scheduler: CheckScheduler,
     val intervalMinutes: suspend () -> Int,
+    /** Vérifications automatiques seulement en Wi-Fi. */
+    val wifiOnly: suspend () -> Boolean = { false },
     /** Un site exige une vérification anti-robot que l'app n'a pas pu passer seule. */
     val onChallenge: (CloudflareChallengeException) -> Unit = {},
 )

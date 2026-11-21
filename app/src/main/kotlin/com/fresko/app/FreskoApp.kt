@@ -15,7 +15,8 @@ class FreskoApp : Application(), Configuration.Provider, ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** Portée de l'application (sauvegarde, actions des notifications). */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
@@ -25,7 +26,8 @@ class FreskoApp : Application(), Configuration.Provider, ImageLoaderFactory {
         container.backup.startAuto(appScope)
         // S'assure qu'un check est planifié (KEEP : ne réinitialise pas le planning existant).
         appScope.launch {
-            container.scheduler.schedule(container.settings.current().intervalMinutes, replace = false)
+            val s = container.settings.current()
+            container.scheduler.schedule(s.intervalMinutes, replace = false, wifiOnly = s.wifiOnly)
         }
     }
 

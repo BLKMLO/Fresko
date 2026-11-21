@@ -68,8 +68,13 @@ class ChallengeRegistry(context: Context) {
         private const val NOTIFIED = "notified_"
         private const val HEADLESS_COOLDOWN = 30 * 60 * 1000L
         private const val NOTIFY_COOLDOWN = 6 * 3600 * 1000L
-        /** NatoManga : www.natomanga.com → www.manganami.com (constaté le 2026-11-06). */
-        private val OBSOLETE_HOSTS = setOf("www.natomanga.com", "natomanga.com")
+        /**
+         * Anciens domaines de NatoManga : natomanga.com → manganami.com (2026-11-06) →
+         * natumanga.com → saiyanmanga.com (2026-11-21).
+         */
+        private val OBSOLETE_HOSTS = setOf(
+            "www.natomanga.com", "natomanga.com", "www.manganami.com", "www.natumanga.com",
+        )
 
         fun hostOf(url: String): String? = runCatching { URI(url).host }.getOrNull()
 

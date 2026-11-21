@@ -9,8 +9,10 @@ import com.fresko.app.challenge.ChallengeActivity
 import com.fresko.app.net.ChallengeAwareFetcher
 import com.fresko.app.net.ChallengeRegistry
 import com.fresko.app.net.CloudflareSolver
+import com.fresko.app.net.SiteAddressPrefs
 import com.fresko.app.net.WebUserAgent
 import com.fresko.app.net.WebViewCookieJar
+import com.fresko.app.notify.AppChapterActions
 import com.fresko.core.model.SourceId
 import com.fresko.core.network.HttpFetcher
 import com.fresko.core.network.OkHttpFetcher
@@ -34,7 +36,7 @@ class AppContainer(context: Context) {
         solver = solver,
         registry = challenges,
     )
-    val sources = SourceRegistry(http)
+    val sources = SourceRegistry(http, SiteAddressPrefs(appContext))
 
     /**
      * Client des couvertures (Coil) : mêmes cookies et même User-Agent que les requêtes de
@@ -55,7 +57,7 @@ class AppContainer(context: Context) {
     private val data = DataModule(appContext)
     val works get() = data.works
     val settings = SettingsRepository(appContext, sources.all.map { it.id })
-    val notifier = ChapterNotifier(appContext)
+    val notifier = ChapterNotifier(appContext, AppChapterActions(appContext, sources))
     val scheduler by lazy { CheckScheduler(appContext) }
 
     val checker by lazy {
@@ -76,6 +78,7 @@ class AppContainer(context: Context) {
         notifier = notifier,
         scheduler = scheduler,
         intervalMinutes = { settings.current().intervalMinutes },
+        wifiOnly = { settings.current().wifiOnly },
         onChallenge = { e ->
             if (challenges.shouldNotify(e.url)) {
                 notifier.notifyChallenge(

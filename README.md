@@ -59,7 +59,19 @@ chapitre devient gratuit.
 
 **Vos œuvres survivent à une désinstallation.** Fresko tient à jour un fichier
 de sauvegarde dans le dossier de votre choix. Réinstaller l'app puis rechoisir
-ce dossier restaure tout.
+ce dossier restaure tout — sans jamais écraser une sauvegarde plus complète.
+
+**Une œuvre, plusieurs sources.** Liez la même œuvre sur deux ou trois sites :
+une seule carte, et une seule alerte par chapitre, celle du premier site qui le
+publie.
+
+**Un site déménage ? Fresko suit.** Quand un site change de domaine (NatoManga
+l'a fait trois fois en un mois), Fresko suit la redirection, retient la nouvelle
+adresse et réécrit les liens déjà enregistrés.
+
+**Les problèmes se voient.** Une œuvre introuvable, un site en panne ou bloqué :
+l'erreur s'affiche sur la carte, dans la fiche et dans les réglages, et la
+vérification réessaie d'elle-même.
 
 ## Fonctionnalités
 
@@ -67,11 +79,14 @@ ce dossier restaure tout.
 |---|---|
 | 🔍 **Recherche en direct** | Sur toutes les sources activées en même temps ; « Suivre » sur un résultat. |
 | 📚 **Œuvres suivies** | Les plus récemment mises à jour en haut, rangées en « À lire » / « À jour ». |
-| 📖 **Fiche d'une œuvre** | Dernier chapitre, lecture, page de l'œuvre, « Marquer lu / non lu », arrêt du suivi, alertes accès anticipé (Asura). |
-| 🔔 **Notifications** | Une par nouveau chapitre ; un appui ouvre le chapitre dans le navigateur. |
-| ↻ **Vérification immédiate** | Tirer l'écran principal vers le bas. |
-| 💾 **Sauvegarde** | Fichier hors de l'app, mis à jour automatiquement (Réglages → Sauvegarde). |
-| ⚙ **Réglages** | Sources activables une à une, fréquence de vérification, « Vérifier maintenant ». |
+| 📖 **Fiche d'une œuvre** | Dernier chapitre, lecture, page de l'œuvre, « Marquer lu / non lu », arrêt du suivi (avec confirmation), alertes accès anticipé (Asura). |
+| 🔗 **Plusieurs sources** | Fiche → « Ajouter une source » → « Lier » : la même œuvre sur plusieurs sites, une seule alerte par chapitre. |
+| 🔔 **Notifications** | Une par nouveau chapitre ; un appui ouvre le chapitre **et le marque lu** ; bouton « Marquer lu » sans l'ouvrir. Bandeau sur l'accueil si les notifications sont coupées. |
+| ⚠ **Erreurs visibles** | Œuvre introuvable, site injoignable ou bloqué : affiché sur la carte, dans la fiche, sur l'accueil et dans les réglages ; « Rechercher l'œuvre à nouveau » en un appui. |
+| 🛡 **Anti-robot** | Vérification Cloudflare passée seule en arrière-plan, sinon une fois à la main ; le cookie est ensuite réutilisé. |
+| ↻ **Vérification immédiate** | Tirer l'écran principal vers le bas ; hors connexion, elle attend le réseau (annulable). |
+| 💾 **Sauvegarde** | Fichier hors de l'app, mis à jour automatiquement (Réglages → Sauvegarde) ; une restauration ajoute les œuvres manquantes sans toucher aux autres. |
+| ⚙ **Réglages** | Sources activables une à une (adresse du site affichée), fréquence, Wi-Fi uniquement, « Vérifier maintenant ». |
 
 Désactiver une source ne supprime rien : ses œuvres sont simplement masquées,
 et réapparaissent quand on la réactive.
@@ -102,9 +117,10 @@ référence, considérée comme lue.
 chapitre sort, l'œuvre passe dans « À lire » et une notification arrive :
 
 ```
-🔔 Fresko · asura
+🔔 Fresko · Asura Scans
    La Tour sans fin
    Chapitre 143 (accès anticipé)
+   [ Marquer lu ]
 ```
 
 *Notification d'exemple, titre fictif.*
@@ -115,14 +131,14 @@ chapitre sort, l'œuvre passe dans « À lire » et une notification arrive :
 |---|---|---|---|
 | **Asura Scans** | asurascans.com (ex-asuracomic.net) | ✓ par œuvre | liste des mises à jour |
 | **Demonic Scans** | demonicscans.org | — | liste des mises à jour |
-| **NatoManga** | natomanga.com | — | une requête par œuvre suivie |
+| **NatoManga** | saiyanmanga.com (ex-natomanga.com, manganami.com) — adresse suivie automatiquement | — | une requête par œuvre suivie |
 
 ## Fréquence et batterie
 
 | Réglage | Valeurs proposées |
 |---|---|
 | Fréquence | 10 min (défaut), 15 min, 30 min, 1 h, 2 h, 6 h, 12 h |
-| Conditions | réseau disponible, batterie non faible |
+| Conditions | réseau disponible (ou Wi-Fi uniquement, en option), batterie non faible |
 
 Android impose 15 minutes minimum aux tâches périodiques : en dessous, Fresko
 enchaîne des tâches ponctuelles. Quand le téléphone est en veille prolongée
@@ -139,8 +155,9 @@ octets/jour = (1440 / intervalle_min) × (18 965 + 15 919)
             = 144 × 34 884 = 5 023 296 octets ≈ 5,0 Mo/jour   (à 10 min)
 ```
 
-NatoManga (mesuré le 2026-10-16) : 233 à 254 octets par œuvre suivie et par
-vérification.
+NatoManga : 233 à 254 octets par œuvre suivie et par vérification (mesuré le
+2026-10-16 sur natomanga.com), 221 à 231 octets (mesuré le 2026-11-21 sur
+saiyanmanga.com, 3 œuvres). La formule garde la borne haute mesurée, 254 octets.
 
 ```
 octets/jour ≈ (1440 / intervalle_min) × N_œuvres × 254

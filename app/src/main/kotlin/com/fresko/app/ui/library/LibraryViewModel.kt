@@ -12,6 +12,7 @@ import com.fresko.core.model.isNewerThan
 import com.fresko.app.net.ChallengeRegistry
 import com.fresko.core.network.CloudflareChallengeException
 import com.fresko.core.network.HttpException
+import com.fresko.feature.checker.ManualCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.coroutineScope
@@ -104,7 +105,10 @@ data class LibraryUiState(
     val search: List<SourceSearch> = emptyList(),
     val enabledSources: List<SourceUi> = emptyList(),
     val lastCheck: Long? = null,
-    val checking: Boolean = false,
+    /** Check manuel (tirer pour vérifier) : en cours, en attente de réseau, ou rien. */
+    val manualCheck: ManualCheck = ManualCheck.IDLE,
+    /** Notifications bloquées (permission refusée ou canal désactivé) : rien ne préviendra. */
+    val notificationsOff: Boolean = false,
     /** Œuvres suivies sur des sources désactivées (conservées, mais masquées). */
     val hiddenCount: Int = 0,
     /** Vérifications anti-robot en attente : hôte → page à ouvrir. */
@@ -159,7 +163,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
         c.settings.settings,
         searchInput,
         c.scheduler.observeManualCheck(),
-    ) { works, settings, input, checking ->
+    ) { works, settings, input, manual ->
         val (q, slotMap, challenges, target) = input
         val enabled = c.sources.all.filter { it.id in settings.enabledSources }.mapNotNull { sourcesUi[it.id] }
         val enabledIds = enabled.map { it.id }.toSet()
@@ -168,7 +172,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             .filter { SourceId(it.sourceId) in enabledIds }
             .groupBy { it.groupId ?: "solo:${it.sourceId}:${it.workKey}" }
             .values
-            .map { group -> TrackedItem(group.mapNotNull { e -> sourcesUi[SourceId(e.sourceId)]?.let { Member(e, it) } }) }
+            .map { group -> TrackedItem(group.mapNotNull { e -> sourcesUi[SourceId(e.sourceId)]?.let { Member(openable(e), it) } }) }
         val trackedKeys = works.map { it.key }.toSet()
         val linking = target?.let { t -> tracked.firstOrNull { it.contains(t) } }
         val linkedSources = linking?.members?.map { it.source.id }.orEmpty().toSet()
@@ -195,7 +199,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             linking = linking,
             enabledSources = enabled,
             lastCheck = settings.lastSuccessBySource.filterKeys { it in enabledIds }.values.maxOrNull(),
-            checking = checking,
+            manualCheck = manual,
             hiddenCount = works.count { SourceId(it.sourceId) !in enabledIds },
             pendingChallenges = challenges,
             sourceErrors = enabled.mapNotNull { s ->
@@ -224,6 +228,22 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
     fun clearQuery() = onQueryChange("")
 
     fun checkNow() = c.scheduler.checkNow()
+
+    fun cancelCheck() = c.scheduler.cancelManualCheck()
+
+    /**
+     * URL ouvrables : un site qui a changé de domaine (NatoManga) voit ses URL enregistrées
+     * réécrites vers le domaine actuel. Chapitre et chapitre lu le sont de la même façon,
+     * donc la comparaison « lu / à lire » est inchangée.
+     */
+    private fun openable(e: WorkEntity): WorkEntity {
+        val source = c.sources[SourceId(e.sourceId)] ?: return e
+        return e.copy(
+            url = source.openableUrl(e.url),
+            chapterUrl = e.chapterUrl?.let(source::openableUrl),
+            readChapterUrl = e.readChapterUrl?.let(source::openableUrl),
+        )
+    }
 
     fun track(info: WorkInfo) {
         viewModelScope.launch { trackNow(info, groupWith = null) }
@@ -274,7 +294,10 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
             return
         }
         val known = info.latestChapter
-        if (known == null || fetched.isNewerThan(known)) {
+        // Même numéro : on préfère la réponse dédiée (URL exacte, date de publication), la
+        // recherche ne donnant parfois qu'un numéro (NatoManga).
+        val sameNumber = known?.number != null && fetched.number == known.number
+        if (known == null || fetched.isNewerThan(known) || sameNumber) {
             c.works.saveLatestChapter(info.key, fetched, now)
             // La référence n'est pas une nouveauté (sauf source en avance dans un groupe).
             c.works.markReferenceRead(info.key)
@@ -293,8 +316,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
     fun restore(uri: android.net.Uri, onDone: (String) -> Unit) {
         viewModelScope.launch {
             val message = try {
-                val n = c.backup.importFrom(uri)
-                "Sauvegarde restaurée : $n œuvre${if (n > 1) "s" else ""}."
+                com.fresko.app.ui.settings.restoreMessage(c.backup.importFrom(uri))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

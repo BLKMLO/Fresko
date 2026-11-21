@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fresko.app.AppContainer
 import com.fresko.core.model.SourceId
+import com.fresko.feature.checker.ManualCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,6 +23,8 @@ data class SourceSetting(
     val trackedCount: Int = 0,
     /** Échec global du dernier check de la source. */
     val error: String? = null,
+    /** Domaine actuel, pour une source qui en change (suivi automatique). */
+    val host: String? = null,
 )
 
 data class BackupUi(
@@ -37,19 +40,24 @@ data class BackupUi(
 data class SettingsUiState(
     val sources: List<SourceSetting> = emptyList(),
     val intervalMinutes: Int = 10,
+    val wifiOnly: Boolean = false,
     val backup: BackupUi = BackupUi(),
+    /** Check manuel : en cours, en attente de réseau, ou rien. */
+    val manualCheck: ManualCheck = ManualCheck.IDLE,
 )
 
 class SettingsViewModel(private val c: AppContainer) : ViewModel() {
 
     private val backupAction = MutableStateFlow(BackupUi())
 
+    private val backupInput = combine(c.backup.lastError, backupAction) { e, a -> e to a }
+
     val state: StateFlow<SettingsUiState> = combine(
         c.settings.settings,
         c.works.observeCountsBySource(),
-        c.backup.lastError,
-        backupAction,
-    ) { s, counts, backupError, action ->
+        backupInput,
+        c.scheduler.observeManualCheck(),
+    ) { s, counts, (backupError, action), manual ->
         SettingsUiState(
             backup = action.copy(
                 folder = s.backupFolderLabel.takeIf { s.backupFileUri != null },
@@ -60,9 +68,12 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
                 SourceSetting(
                     it.id, it.displayName, it.id in s.enabledSources, s.lastSuccessBySource[it.id], counts[it.id] ?: 0,
                     error = s.sourceErrors[it.id]?.message,
+                    host = it.currentHost,
                 )
             },
             intervalMinutes = s.intervalMinutes,
+            wifiOnly = s.wifiOnly,
+            manualCheck = manual,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -72,14 +83,19 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
 
     fun setInterval(minutes: Int) = viewModelScope.launch {
         c.settings.setIntervalMinutes(minutes)
-        c.scheduler.schedule(minutes, replace = true)
+        c.scheduler.schedule(minutes, replace = true, wifiOnly = c.settings.current().wifiOnly)
+    }
+
+    fun setWifiOnly(enabled: Boolean) = viewModelScope.launch {
+        c.settings.setWifiOnly(enabled)
+        c.scheduler.schedule(c.settings.current().intervalMinutes, replace = true, wifiOnly = enabled)
     }
 
     fun checkNow() = c.scheduler.checkNow()
 
     fun chooseBackupFolder(treeUri: Uri) = backupAction {
         val restored = c.backup.setFolder(treeUri)
-        if (restored > 0) "Sauvegarde trouvée dans ce dossier : $restored œuvre${plural(restored)} restaurée${plural(restored)}."
+        if (restored > 0) "Sauvegarde trouvée dans ce dossier : $restored œuvre${plural(restored)} ajoutée${plural(restored)}."
         else "Sauvegarde automatique activée."
     }
 
@@ -94,8 +110,7 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
     }
 
     fun importFrom(uri: Uri) = backupAction {
-        val n = c.backup.importFrom(uri)
-        "Sauvegarde restaurée : $n œuvre${plural(n)}."
+        restoreMessage(c.backup.importFrom(uri))
     }
 
     private fun backupAction(block: suspend () -> String) =
@@ -116,4 +131,12 @@ class SettingsViewModel(private val c: AppContainer) : ViewModel() {
     companion object {
         val INTERVALS = listOf(10, 15, 30, 60, 120, 360, 720)
     }
+}
+
+/** « 12 œuvres ajoutées, 3 déjà suivies (conservées) ». */
+internal fun restoreMessage(r: com.fresko.app.backup.BackupController.RestoreResult): String {
+    fun s(n: Int) = if (n > 1) "s" else ""
+    val added = if (r.added == 0) "Aucune nouvelle œuvre" else "${r.added} œuvre${s(r.added)} ajoutée${s(r.added)}"
+    val kept = if (r.alreadyTracked > 0) ", ${r.alreadyTracked} déjà suivie${s(r.alreadyTracked)} (conservée${s(r.alreadyTracked)} telle${s(r.alreadyTracked)} quelle${s(r.alreadyTracked)})" else ""
+    return "Sauvegarde restaurée : $added$kept."
 }

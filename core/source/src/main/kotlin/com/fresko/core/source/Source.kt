@@ -23,6 +23,15 @@ interface Source {
      */
     val imageReferer: String? get() = null
 
+    /**
+     * Adresse à ouvrir pour une URL enregistrée de cette source (chapitre, œuvre). Un site
+     * qui a changé de domaine y remplace l'ancien domaine par l'actuel ; par défaut, inchangée.
+     */
+    fun openableUrl(url: String): String = url
+
+    /** Domaine actuellement utilisé, s'il peut changer (affiché dans les réglages). */
+    val currentHost: String? get() = null
+
     /** Recherche sur le site : c'est le seul moyen de trouver une œuvre à suivre. */
     suspend fun search(query: String): List<WorkInfo>
 
@@ -69,3 +78,21 @@ data class RecentUpdates(
     val coversCursor: Boolean,
     val anchors: Set<String> = emptySet(),
 )
+
+/**
+ * Mémorise l'adresse actuelle d'un site qui change de domaine (NatoManga en a changé trois
+ * fois en un mois). Implémenté par l'app (stockage persistant) ; [NoAddressStore] en test.
+ *
+ * @param key identifiant de l'adresse (source + adresse par défaut de la version de l'app :
+ *   une adresse apprise avec une ancienne valeur par défaut est ignorée après mise à jour).
+ */
+interface SiteAddressStore {
+    fun get(key: String): String?
+    fun set(key: String, baseUrl: String)
+}
+
+/** Aucune mémorisation (tests, sources à domaine fixe). */
+object NoAddressStore : SiteAddressStore {
+    override fun get(key: String): String? = null
+    override fun set(key: String, baseUrl: String) = Unit
+}

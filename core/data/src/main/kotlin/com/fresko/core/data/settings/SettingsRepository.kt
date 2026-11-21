@@ -3,6 +3,7 @@ package com.fresko.core.data.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -30,6 +31,8 @@ data class Settings(
     val lastBackupAt: Long? = null,
     /** Échec global du dernier check, par source (effacé au check réussi suivant). */
     val sourceErrors: Map<SourceId, SourceError> = emptyMap(),
+    /** Vérifications automatiques seulement en Wi-Fi (réseau non facturé à l'usage). */
+    val wifiOnly: Boolean = false,
 )
 
 data class SourceError(val message: String, val atMillis: Long)
@@ -81,6 +84,10 @@ class SettingsRepository(
         store.edit { it[LAST_BACKUP] = millis }
     }
 
+    suspend fun setWifiOnly(enabled: Boolean) {
+        store.edit { it[WIFI_ONLY] = enabled }
+    }
+
     suspend fun setIntervalMinutes(minutes: Int) {
         store.edit { it[INTERVAL] = minutes.coerceAtLeast(MIN_INTERVAL) }
     }
@@ -126,6 +133,7 @@ class SettingsRepository(
             backupFileUri = this[BACKUP_URI],
             backupFolderLabel = this[BACKUP_LABEL],
             lastBackupAt = this[LAST_BACKUP],
+            wifiOnly = this[WIFI_ONLY] ?: false,
             sourceErrors = allSourceIds.mapNotNull { id ->
                 this[errorKey(id)]?.let { id to SourceError(it, this[errorAtKey(id)] ?: 0L) }
             }.toMap(),
@@ -142,6 +150,7 @@ class SettingsRepository(
         private val BACKUP_LABEL = stringPreferencesKey("backup_folder_label")
         private val LAST_BACKUP = longPreferencesKey("last_backup_at")
         private val INTERVAL = intPreferencesKey("interval_minutes")
+        private val WIFI_ONLY = booleanPreferencesKey("wifi_only")
         private fun lastSuccessKey(id: SourceId) = longPreferencesKey("last_success_${id.value}")
         private fun errorKey(id: SourceId) = stringPreferencesKey("check_error_${id.value}")
         private fun errorAtKey(id: SourceId) = longPreferencesKey("check_error_at_${id.value}")

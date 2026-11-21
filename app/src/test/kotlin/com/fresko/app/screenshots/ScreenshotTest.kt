@@ -235,9 +235,10 @@ class ScreenshotTest {
         sources = listOf(
             SourceSetting(asura.id, asura.name, true, now - 4 * 60_000, 3),
             SourceSetting(demonic.id, demonic.name, false, now - 9 * 60_000, 2),
-            SourceSetting(nato.id, nato.name, true, now - 4 * 60_000, 1),
+            SourceSetting(nato.id, nato.name, true, now - 4 * 60_000, 1, host = "www.saiyanmanga.com"),
         ),
         intervalMinutes = 10,
+        wifiOnly = true,
         backup = com.fresko.app.ui.settings.BackupUi(folder = "Documents/Fresko", lastBackupAt = now - 2 * 60_000),
     )
 
@@ -248,5 +249,23 @@ class ScreenshotTest {
     @Config(qualifiers = "w400dp-h1900dp-xhdpi")
     @Test fun settingsFullDark() = shot("6-settings-full", dark = true) {
         SettingsContent(settingsState.copy(backup = settingsState.backup.copy(message = "Copie exportée : 6 œuvres.")))
+    }
+
+    /** Bandeaux : check manuel en attente de réseau (après 2 s), notifications coupées. */
+    @Test fun bannersLight() = shot(
+        "13-banners", dark = false,
+        interact = { compose.mainClock.advanceTimeBy(2_500) },
+    ) {
+        LibraryContent(
+            LibraryUiState(
+                tracked = tracked, enabledSources = listOf(asura, demonic, nato), lastCheck = now - 4 * 60_000,
+                manualCheck = com.fresko.feature.checker.ManualCheck.WAITING, notificationsOff = true,
+            ),
+            LibraryActions(),
+        )
+    }
+
+    @Test fun noSourceSearchLight() = shot("14-no-source", dark = false) {
+        LibraryContent(LibraryUiState(tracked = tracked, query = "solo"), LibraryActions())
     }
 }

@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import com.fresko.feature.checker.ManualCheck
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +76,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
         onBack = onBack,
         onToggleSource = { id, enabled -> viewModel.setSourceEnabled(id, enabled) },
         onInterval = { viewModel.setInterval(it) },
+        onWifiOnly = { viewModel.setWifiOnly(it) },
         onCheckNow = viewModel::checkNow,
         backupActions = BackupActions(
             onChooseFolder = { pickFolder.launch(null) },
@@ -105,6 +108,7 @@ fun SettingsContent(
     onBack: () -> Unit = {},
     onToggleSource: (SourceId, Boolean) -> Unit = { _, _ -> },
     onInterval: (Int) -> Unit = {},
+    onWifiOnly: (Boolean) -> Unit = {},
     onCheckNow: () -> Unit = {},
     backupActions: BackupActions = BackupActions(),
 ) {
@@ -161,6 +165,13 @@ fun SettingsContent(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (s.enabled && s.host != null) {
+                                Text(
+                                    "Adresse : ${s.host} (suivie automatiquement)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             if (s.enabled && s.error != null) {
                                 Text(
                                     "Dernier check en échec : ${s.error}",
@@ -188,6 +199,19 @@ fun SettingsContent(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text("Wi-Fi uniquement", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (state.wifiOnly) "Pas de vérification automatique sur les données mobiles."
+                            else "Vérifications sur tout réseau (Wi-Fi et données mobiles).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = state.wifiOnly, onCheckedChange = onWifiOnly)
+                }
+                Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(
                         Icons.Filled.Info, contentDescription = null, modifier = Modifier.size(16.dp).padding(top = 2.dp),
@@ -204,10 +228,21 @@ fun SettingsContent(
             }
 
             SettingsCard("Vérification", null) {
-                Button(onClick = onCheckNow, modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                val busy = state.manualCheck != ManualCheck.IDLE
+                Button(onClick = onCheckNow, enabled = !busy, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                    if (state.manualCheck == ManualCheck.RUNNING) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Filled.Refresh, contentDescription = null)
+                    }
                     Spacer(Modifier.width(8.dp))
-                    Text("Vérifier maintenant")
+                    Text(
+                        when (state.manualCheck) {
+                            ManualCheck.RUNNING -> "Vérification en cours…"
+                            ManualCheck.WAITING -> "En attente de connexion…"
+                            ManualCheck.IDLE -> "Vérifier maintenant"
+                        }
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(

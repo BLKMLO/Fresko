@@ -9,6 +9,8 @@ import com.fresko.core.source.RecentUpdates
 import com.fresko.core.source.Source
 import com.fresko.core.source.UpdateCursor
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Cœur du check périodique, indépendant d'Android.
@@ -44,7 +46,15 @@ class UpdateChecker(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
-    suspend fun check(): CheckReport {
+    /**
+     * Un seul check à la fois : un check manuel lancé pendant un check planifié attend la fin
+     * de celui-ci (sinon les deux voient le même « dernier chapitre connu » et notifient deux fois).
+     */
+    private val mutex = Mutex()
+
+    suspend fun check(): CheckReport = mutex.withLock { checkAll() }
+
+    private suspend fun checkAll(): CheckReport {
         val enabledIds = enabled.enabledSourceIds()
         val newChapters = mutableListOf<NewChapter>()
         val errors = mutableMapOf<SourceId, Throwable>()
@@ -55,8 +65,11 @@ class UpdateChecker(
                 // Les chapitres trouvés sont déjà enregistrés : il faut les notifier.
                 // Les œuvres en échec portent leur propre erreur ; la source, elle, a répondu.
                 newChapters += e.found
-                errors[source.id] = e.cause ?: e
-                state.saveSourceError(source.id, null, clock())
+                val cause = e.cause ?: e
+                errors[source.id] = cause
+                // Erreur touchant tout le site (réseau, panne, anti-robot) : erreur de source.
+                // Sinon, les œuvres en échec portent leur propre erreur ; la source a répondu.
+                state.saveSourceError(source.id, if (e.siteWide) CheckErrors.describe(cause) else null, clock())
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
                 errors[source.id] = e
@@ -93,6 +106,10 @@ class UpdateChecker(
                     fetched?.takeIf { allowEarly || !it.isEarlyAccess }
                 } catch (e: Throwable) {
                     if (e is CancellationException) throw e
+                    // Site injoignable, en panne ou bloqué : inutile d'interroger les œuvres
+                    // suivantes (chacune attendrait le délai réseau ; Android arrête un check
+                    // au bout de 10 min). Les chapitres déjà trouvés sont conservés.
+                    if (CheckErrors.isSiteWide(e)) throw PartialCheckException(found, e, siteWide = true)
                     if (firstError == null) firstError = e
                     workError = CheckErrors.describe(e)
                     null
@@ -113,6 +130,13 @@ class UpdateChecker(
                     latest.isNewerThan(known) -> {
                         works.saveLatestChapter(work.key, latest, startedAt)
                         if (!alreadyKnownInGroup(work, latest)) found += NewChapter(work, latest)
+                        newKnown = latest
+                    }
+                    // Même chapitre, passé de l'accès anticipé au gratuit : mise à jour silencieuse
+                    // (sinon le badge « Anticipé » restait affiché).
+                    known.isEarlyAccess && !latest.isEarlyAccess &&
+                        latest.number != null && latest.number == known.number -> {
+                        works.saveLatestChapter(work.key, latest, startedAt)
                         newKnown = latest
                     }
                 }
@@ -156,6 +180,9 @@ data class CheckReport(
     val errors: Map<SourceId, Throwable>,
 )
 
-/** Certaines œuvres n'ont pas pu être vérifiées ; [found] contient celles qui l'ont été. */
-class PartialCheckException(val found: List<NewChapter>, cause: Throwable) :
+/**
+ * Certaines œuvres n'ont pas pu être vérifiées ; [found] contient celles qui l'ont été.
+ * @param siteWide l'échec touche tout le site (vérification de la source interrompue).
+ */
+class PartialCheckException(val found: List<NewChapter>, cause: Throwable, val siteWide: Boolean = false) :
     Exception("Vérification partielle", cause)

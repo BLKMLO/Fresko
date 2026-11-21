@@ -52,6 +52,7 @@ class BackupController(
             settings = BackupSettings(
                 intervalMinutes = s.intervalMinutes,
                 disabledSources = allSourceIds.filter { it !in s.enabledSources }.map { it.value }.toSet(),
+                wifiOnly = s.wifiOnly,
             ),
             works = works.snapshot().map(BackupMapper::toBackup),
         )
@@ -64,25 +65,35 @@ class BackupController(
         backup.works.size
     }
 
-    /** Restauration : ajoute/remplace les œuvres et applique les réglages. Renvoie le nombre d'œuvres. */
-    suspend fun importFrom(uri: Uri): Int = withContext(Dispatchers.IO) {
+    /** Résultat d'une restauration : œuvres ajoutées, et œuvres déjà suivies (conservées). */
+    data class RestoreResult(val added: Int, val alreadyTracked: Int)
+
+    /** Restauration manuelle : ajoute les œuvres absentes et applique les réglages. */
+    suspend fun importFrom(uri: Uri): RestoreResult = withContext(Dispatchers.IO) {
         val text = resolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             ?: error("Fichier illisible")
-        restore(BackupCodec.decode(text))
+        restore(BackupCodec.decode(text), applySettings = true)
     }
 
-    private suspend fun restore(backup: BackupFile): Int {
-        works.restore(backup.works.map(BackupMapper::toEntity))
-        settings.setDisabledSources(backup.settings.disabledSources)
-        settings.setIntervalMinutes(backup.settings.intervalMinutes)
-        scheduler().schedule(settings.current().intervalMinutes, replace = true)
-        return backup.works.size
+    private suspend fun restore(backup: BackupFile, applySettings: Boolean): RestoreResult {
+        val added = works.restore(backup.works.map(BackupMapper::toEntity))
+        if (applySettings) {
+            settings.setDisabledSources(backup.settings.disabledSources)
+            settings.setIntervalMinutes(backup.settings.intervalMinutes)
+            settings.setWifiOnly(backup.settings.wifiOnly)
+            val s = settings.current()
+            scheduler().schedule(s.intervalMinutes, replace = true, wifiOnly = s.wifiOnly)
+        }
+        return RestoreResult(added, backup.works.size - added)
     }
 
     /**
-     * Choix du dossier de sauvegarde automatique. Si une sauvegarde Fresko s'y trouve déjà
-     * et que l'app ne suit encore aucune œuvre (réinstallation), elle est restaurée.
-     * @return nombre d'œuvres restaurées (0 si rien n'a été restauré).
+     * Choix du dossier de sauvegarde automatique. Si une sauvegarde Fresko s'y trouve déjà, ses
+     * œuvres absentes de l'app sont ajoutées **avant** que le fichier soit réécrit : sinon,
+     * après une réinstallation, suivre une œuvre puis choisir le dossier écrasait l'ancienne
+     * sauvegarde. Les réglages sont repris seulement si l'app ne suivait encore rien.
+     * Un fichier illisible n'est jamais écrasé (erreur).
+     * @return nombre d'œuvres ajoutées depuis la sauvegarde trouvée.
      */
     suspend fun setFolder(treeUri: Uri): Int = withContext(Dispatchers.IO) {
         resolver.takePersistableUriPermission(
@@ -92,9 +103,11 @@ class BackupController(
         val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
         val existing = findChild(treeUri, treeDocId, FILE_NAME)
         var restored = 0
-        if (existing != null && works.snapshot().isEmpty()) {
+        if (existing != null) {
             val text = resolver.openInputStream(existing)?.use { it.readBytes().decodeToString() }
-            if (text != null) restored = restore(BackupCodec.decode(text))
+                ?: error("Sauvegarde existante illisible : elle n'a pas été modifiée.")
+            val wasEmpty = works.snapshot().isEmpty()
+            restored = restore(BackupCodec.decode(text), applySettings = wasEmpty).added
         }
         val file = existing ?: DocumentsContract.createDocument(
             resolver,

@@ -55,6 +55,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,7 +76,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fresko.feature.checker.ChapterNotifier
+import com.fresko.feature.checker.ManualCheck
+import kotlinx.coroutines.delay
 import com.fresko.app.ui.components.Cover
 import com.fresko.app.ui.components.EarlyAccessBadge
 import com.fresko.app.ui.components.Placeholder
@@ -99,9 +104,24 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpenSettings: () -> Unit) {
     val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.restore(uri) { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     }
+    // Revérifié à chaque retour sur l'écran (l'utilisateur a pu changer le réglage entre-temps).
+    var notificationsOff by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        notificationsOff = !ChapterNotifier.notificationsAllowed(context)
+        onPauseOrDispose { }
+    }
     LibraryContent(
-        state = state,
+        state = state.copy(notificationsOff = notificationsOff),
         actions = LibraryActions(
+            onCancelCheck = viewModel::cancelCheck,
+            onOpenNotificationSettings = {
+                runCatching {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName),
+                    )
+                }
+            },
             onQueryChange = viewModel::onQueryChange,
             onClearQuery = viewModel::clearQuery,
             onRefresh = viewModel::checkNow,
@@ -142,6 +162,9 @@ class LibraryActions(
     val onOpenSettings: () -> Unit = {},
     val onRestoreBackup: () -> Unit = {},
     val onSolveChallenge: (url: String) -> Unit = {},
+    /** Annule un check manuel qui attend le réseau. */
+    val onCancelCheck: () -> Unit = {},
+    val onOpenNotificationSettings: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -150,15 +173,31 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
     val context = LocalContext.current
     val open: (String) -> Unit = { url ->
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure { Toast.makeText(context, "Aucune application pour ouvrir ce lien.", Toast.LENGTH_LONG).show() }
     }
     var selectedKey by remember { mutableStateOf(initialSelection) }
     // Retour pendant l'ajout d'une source : on l'annule (au lieu de quitter l'app).
     BackHandler(enabled = state.linking != null) { actions.onCancelLink() }
+    // Retour pendant une recherche : on efface la recherche (au lieu de quitter l'app).
+    BackHandler(enabled = state.linking == null && state.query.isNotEmpty()) { actions.onClearQuery() }
     val selected = state.tracked.firstOrNull { it.contains(selectedKey) }
+
+    // Check manuel en file : au-delà de 2 s, c'est qu'il attend le réseau → on arrête le
+    // spinner et on l'explique (avant, il tournait indéfiniment hors connexion).
+    var waitingLong by remember { mutableStateOf(false) }
+    LaunchedEffect(state.manualCheck) {
+        waitingLong = false
+        if (state.manualCheck == ManualCheck.WAITING) {
+            delay(2_000)
+            waitingLong = true
+        }
+    }
+    val refreshing = state.manualCheck == ManualCheck.RUNNING ||
+        (state.manualCheck == ManualCheck.WAITING && !waitingLong)
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         PullToRefreshBox(
-            isRefreshing = state.checking,
+            isRefreshing = refreshing,
             onRefresh = actions.onRefresh,
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
@@ -172,6 +211,24 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
                 }
                 for ((host, url) in state.pendingChallenges) {
                     item(key = "challenge:$host") { ChallengeBanner(host, onSolve = { actions.onSolveChallenge(url) }) }
+                }
+                if (state.manualCheck == ManualCheck.WAITING && waitingLong) {
+                    item(key = "waiting") {
+                        InfoBanner(
+                            "Pas de connexion",
+                            "La vérification démarrera dès le retour du réseau.",
+                            action = "Annuler", onAction = actions.onCancelCheck,
+                        )
+                    }
+                }
+                if (state.notificationsOff && state.tracked.isNotEmpty()) {
+                    item(key = "notifoff") {
+                        InfoBanner(
+                            "Notifications désactivées",
+                            "Fresko vérifie toujours, mais ne pourra pas vous prévenir des nouveaux chapitres.",
+                            action = "Activer", onAction = actions.onOpenNotificationSettings,
+                        )
+                    }
                 }
                 if (!state.isSearching) {
                     for (err in state.sourceErrors) {
@@ -254,6 +311,10 @@ fun LibraryContent(state: LibraryUiState, actions: LibraryActions, initialSelect
             onMarkRead = { actions.onMarkRead(selected.key) },
             onMarkUnread = { actions.onMarkUnread(selected.key) },
             onRemoveSource = actions.onUntrack,
+            onSearchAgain = { title ->
+                selectedKey = null
+                actions.onQueryChange(title)
+            },
             onAddSource = {
                 actions.onStartLink(selected.key)
                 selectedKey = null
@@ -276,6 +337,14 @@ private fun LazyListScope.searchResults(
     onSelect: (WorkKey) -> Unit,
     onLink: (WorkInfo) -> Unit,
 ) {
+    if (state.search.isEmpty()) {
+        item(key = "nosource") {
+            Hint(
+                if (state.enabledSources.isEmpty()) "Aucune source activée : activez-en une dans les réglages pour rechercher."
+                else "Toutes les sources activées sont déjà liées à cette œuvre."
+            )
+        }
+    }
     if (state.matchingTracked.isNotEmpty()) {
         item(key = "title_matching") { SectionTitle("Dans vos lectures", state.matchingTracked.size.toString()) }
         items(state.matchingTracked, key = { "m:" + itemKey(it) }) { item ->
@@ -327,6 +396,24 @@ private fun LazyListScope.searchResults(
                     modifier = Modifier.animateItem(),
                 )
             }
+        }
+    }
+}
+
+/** Bandeau d'information avec une action (pas de réseau, notifications coupées…). */
+@Composable
+private fun InfoBanner(title: String, text: String, action: String, onAction: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+            TextButton(onClick = onAction) { Text(action) }
         }
     }
 }

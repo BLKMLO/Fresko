@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -70,6 +71,8 @@ fun WorkSheet(
     onRemoveSource: (WorkKey) -> Unit,
     onAddSource: () -> Unit,
     onUntrack: () -> Unit,
+    /** Œuvre introuvable (renommée, retirée…) : relancer une recherche sur son titre. */
+    onSearchAgain: (String) -> Unit = {},
 ) {
     val e = item.entity
     // Suppression demandée, en attente de confirmation.
@@ -170,6 +173,14 @@ fun WorkSheet(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
+                        TextButton(
+                            onClick = { onSearchAgain(f.title) },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                        ) {
+                            Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Rechercher l'œuvre à nouveau")
+                        }
                     }
                 }
             }

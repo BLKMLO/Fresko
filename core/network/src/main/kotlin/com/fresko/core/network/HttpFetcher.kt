@@ -9,7 +9,17 @@ import java.io.IOException
 interface HttpFetcher {
     /** Retourne le corps de la réponse en texte. Lève [HttpException] si code != 2xx. */
     suspend fun get(url: String, headers: Map<String, String> = emptyMap()): String
+
+    /**
+     * Comme [get], mais indique aussi l'adresse finale après redirections : sert à
+     * détecter un site qui a changé de domaine. Par défaut, pas de redirection connue.
+     */
+    suspend fun fetch(url: String, headers: Map<String, String> = emptyMap()): HttpResult =
+        HttpResult(get(url, headers), url)
 }
+
+/** Réponse HTTP réussie : corps texte et URL finale (après redirections éventuelles). */
+data class HttpResult(val body: String, val finalUrl: String)
 
 open class HttpException(val code: Int, val url: String) : IOException("HTTP $code pour $url")
 

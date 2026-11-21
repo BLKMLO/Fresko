@@ -29,6 +29,8 @@ data class BackupFile(
 data class BackupSettings(
     @SerialName("interval_minutes") val intervalMinutes: Int,
     @SerialName("disabled_sources") val disabledSources: Set<String> = emptySet(),
+    /** v1.0.0 ; absent des sauvegardes plus anciennes. */
+    @SerialName("wifi_only") val wifiOnly: Boolean = false,
 )
 
 @Serializable

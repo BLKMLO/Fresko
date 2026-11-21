@@ -8,6 +8,7 @@ import com.fresko.core.model.SourceId
 import com.fresko.core.model.TrackedWork
 import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
+import com.fresko.core.model.sameLocation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -92,6 +93,20 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
         if (group != null) dao.markGroupRead(group) else dao.markRead(key.sourceId.value, key.key)
     }
 
+    /**
+     * « Marquer lu » depuis une notification : seulement si le chapitre notifié est toujours le
+     * dernier connu (sinon un chapitre sorti depuis serait marqué lu sans avoir été vu).
+     * @return true si l'œuvre a été marquée lue.
+     */
+    suspend fun markReadIfCurrent(key: WorkKey, chapterUrl: String, chapterNumber: Double?): Boolean {
+        val e = get(key) ?: return false
+        val current = e.chapterUrl ?: return false
+        val same = sameLocation(current, chapterUrl) ||
+            (chapterNumber != null && e.chapterNumber == chapterNumber)
+        if (same) markRead(key)
+        return same
+    }
+
     suspend fun markUnread(key: WorkKey) {
         val group = get(key)?.groupId
         if (group != null) dao.markGroupUnread(group) else dao.markUnread(key.sourceId.value, key.key)
@@ -104,17 +119,24 @@ class WorkRepository(private val dao: WorkDao) : TrackedWorksStore {
     /** Toutes les œuvres suivies (pour la sauvegarde). */
     suspend fun snapshot(): List<WorkEntity> = dao.allTracked()
 
-    /** Restauration : ajoute ou remplace les œuvres (celles déjà présentes sont écrasées). */
-    suspend fun restore(entities: List<WorkEntity>) = dao.insertAll(entities)
+    /**
+     * Restauration : **ajoute** les œuvres absentes ; celles déjà suivies sont conservées telles
+     * quelles (une sauvegarde plus ancienne ferait reculer leurs chapitres, d'où des alertes
+     * en double). @return nombre d'œuvres ajoutées.
+     */
+    suspend fun restore(entities: List<WorkEntity>): Int {
+        val existing = dao.allTracked().map { it.key }.toSet()
+        val added = entities.filter { it.key !in existing }.distinctBy { it.key }
+        dao.insertAll(added)
+        dao.dissolveSingletonGroups()
+        return added.size
+    }
 
     /** Ne plus suivre cette source ; un groupe réduit à une seule source est dissous. */
     suspend fun untrack(key: WorkKey) {
         val group = get(key)?.groupId
         dao.delete(key.sourceId.value, key.key)
-        if (group != null) {
-            val rest = dao.groupMembers(group)
-            if (rest.size == 1) dao.setGroup(rest[0].sourceId, rest[0].workKey, null)
-        }
+        if (group != null) dao.dissolveSingletonGroups()
     }
 
     /** Ne plus suivre l'œuvre du tout (toutes les sources de son groupe). */

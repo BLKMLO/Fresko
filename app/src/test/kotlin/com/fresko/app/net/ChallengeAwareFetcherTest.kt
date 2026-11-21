@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class ChallengeAwareFetcherTest {
 
-    private val url = "https://www.manganami.com/search/story/solo"
+    private val url = "https://www.saiyanmanga.com/search/story/solo"
     private lateinit var registry: ChallengeRegistry
 
     /** Renvoie un défi tant que [blocked] est vrai. */
@@ -52,7 +52,7 @@ class ChallengeAwareFetcherTest {
         val solver = FakeSolver(site, succeeds = true)
         val body = ChallengeAwareFetcher(site, solver, registry).get(url)
         assertEquals("ok", body)
-        assertEquals(listOf("https://www.manganami.com/"), solver.solved) // page d'accueil ouverte
+        assertEquals(listOf("https://www.saiyanmanga.com/"), solver.solved) // page d'accueil ouverte
         assertTrue(registry.pending.value.isEmpty())
     }
 
@@ -64,7 +64,7 @@ class ChallengeAwareFetcherTest {
             fetcher.get(url); fail("exception attendue")
         } catch (_: CloudflareChallengeException) {
         }
-        assertEquals(mapOf("www.manganami.com" to "https://www.manganami.com/"), registry.pending.value)
+        assertEquals(mapOf("www.saiyanmanga.com" to "https://www.saiyanmanga.com/"), registry.pending.value)
     }
 
     @Test
@@ -96,7 +96,7 @@ class ChallengeAwareFetcherTest {
     fun `etat persiste entre deux demarrages`() {
         registry.markPending(url)
         val again = ChallengeRegistry(ApplicationProvider.getApplicationContext())
-        assertEquals("https://www.manganami.com/", again.pending.value["www.manganami.com"])
+        assertEquals("https://www.saiyanmanga.com/", again.pending.value["www.saiyanmanga.com"])
     }
 
     @Test
@@ -104,6 +104,6 @@ class ChallengeAwareFetcherTest {
         registry.markPending("https://www.natomanga.com/search/story/solo")
         registry.markPending(url)
         val again = ChallengeRegistry(ApplicationProvider.getApplicationContext())
-        assertEquals(mapOf("www.manganami.com" to "https://www.manganami.com/"), again.pending.value)
+        assertEquals(mapOf("www.saiyanmanga.com" to "https://www.saiyanmanga.com/"), again.pending.value)
     }
 }

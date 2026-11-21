@@ -9,6 +9,17 @@ object CheckErrors {
     /** Le site a répondu, mais sans aucun chapitre pour l'œuvre. */
     const val NO_CHAPTER = "Aucun chapitre trouvé sur le site pour cette œuvre."
 
+    /**
+     * L'erreur touche tout le site (réseau, délai, panne 5xx, blocage 403/429, défi anti-robot)
+     * et non une œuvre précise (400/404 : œuvre introuvable ; réponse illisible).
+     */
+    fun isSiteWide(e: Throwable): Boolean = when (e) {
+        is CloudflareChallengeException -> true
+        is HttpException -> e.code >= 500 || e.code == 403 || e.code == 429
+        is java.io.IOException -> true
+        else -> false
+    }
+
     fun describe(e: Throwable): String = when (e) {
         is CloudflareChallengeException -> "Le site demande une vérification anti-robot."
         is HttpException -> when (e.code) {

@@ -27,6 +27,19 @@
             android:name=".challenge.ChallengeActivity"
             android:exported="false" />
 
+        <!-- Toucher une notification de chapitre : marque lu puis ouvre le navigateur (invisible). -->
+        <activity
+            android:name=".notify.OpenChapterActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <receiver
+            android:name=".notify.MarkReadReceiver"
+            android:exported="false" />
+
         <!-- WorkManager est initialisé par FreskoApp (Configuration.Provider). -->
         <provider
             android:name="androidx.startup.InitializationProvider"

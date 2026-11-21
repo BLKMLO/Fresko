@@ -22,7 +22,7 @@ core/network/        HttpFetcher (interface) + OkHttpFetcher (pure Kotlin)
 core/model/          Modèles : WorkKey, WorkInfo, ChapterInfo, TrackedWork… (pure Kotlin)
 sources/asura/       Implémentation Asura (API JSON) + tests sur fixtures réelles
 sources/demonic/     Implémentation Demonic (HTML/Jsoup) + tests sur fixtures réelles
-sources/natomanga/   Implémentation NatoManga (recherche HTML + API chapitres JSON) + tests
+sources/natomanga/   Implémentation NatoManga (recherche JSON/HTML + API chapitres JSON, domaine suivi automatiquement) + tests
 tools/icon/          Illustration source de l'icône + scripts de découpage (voir son README)
 ```
 
@@ -45,6 +45,10 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
      chaque maillon planifie le suivant (`APPEND_OR_REPLACE`, car `REPLACE`
      annulerait le worker en cours).
    - Doze peut retarder les exécutions quand le téléphone est inactif (comportement Android normal).
+   - Option **Wi-Fi uniquement** (v1.0.0, DataStore `wifi_only`) : contrainte `UNMETERED` pour
+     les checks planifiés ; le check manuel accepte tout réseau. État du check manuel
+     (`ManualCheck` : IDLE / WAITING / RUNNING) : au-delà de 2 s en file, l'accueil affiche
+     « Pas de connexion » (annulable) au lieu d'un spinner infini.
 2. `UpdateChecker` : pour chaque source activée ayant des œuvres suivies, **une** requête
    « mises à jour récentes ». Si elle ne couvre pas toute la période depuis le dernier
    check réussi (`coversCursor = false`), requête dédiée par œuvre suivie absente.
@@ -59,6 +63,13 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    alors vérifiée par requête dédiée à chaque check jusqu'à l'alerte (l'endpoint
    chapitres d'Asura ne renvoie que les chapitres gratuits).
 5. Le curseur (`UpdateCursor` : instant + ancres) n'est enregistré que si tout a été vérifié.
+   **v1.0.0** : `UpdateChecker.check()` est sérialisé (`Mutex`) — un check manuel pendant un check
+   planifié notifiait deux fois. Une erreur « tout le site » pendant les requêtes par œuvre
+   (`CheckErrors.isSiteWide` : réseau, délai, 5xx, 403/429, défi Cloudflare) interrompt la
+   source (erreur de source) au lieu d'attendre chaque œuvre (limite de 10 min de WorkManager) ;
+   400/404 restent des erreurs d'œuvre. Même chapitre passé d'anticipé à gratuit : mise à jour
+   silencieuse (badge). `isNewerThan` sans numéro compare les URL **au domaine près**
+   (`sameLocation`).
 6. **Statut « lu »** (v0.3.0, se règle dans la fiche de l'œuvre uniquement) : colonne `read_chapter_url` ; une œuvre est « à lire »
    si `chapter_url ≠ read_chapter_url`. Le premier chapitre connu d'une œuvre
    (référence au suivi ou initialisation par le check) est considéré comme lu
@@ -113,6 +124,20 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    Suppressions (« Ne plus suivre » et « × » d'une source) confirmées par un dialogue (v0.7.1).
    **Limite** : numérotations différentes entre sites non gérées (pas de décalage par source) ;
    les numéros de chaque source sont visibles dans la fiche.
+12. **Domaine suivi automatiquement** (v1.0.0, NatoManga) : `HttpFetcher.fetch` renvoie l'URL
+   finale après redirections (`OkHttpFetcher` : `response.request.url`, testé sur deux serveurs
+   locaux). Redirection vers un **autre hôte avec le même chemin** (`movedTo`, https seulement)
+   → nouvelle adresse mémorisée (`SiteAddressStore`, SharedPreferences `site_addresses`, clé =
+   source + adresse par défaut de la version : une adresse apprise est oubliée si la valeur par
+   défaut change à la mise à jour). `Source.openableUrl` réécrit les URL enregistrées
+   (`/manga/…`) vers le domaine actuel (UI, notifications) ; `Source.currentHost` affiché dans
+   Réglages > Sources. Hôtes obsolètes purgés de `ChallengeRegistry`.
+13. **Notifications** (v1.0.0) : `ChapterActions` (fourni par l'app : `AppChapterActions`).
+   Toucher → `OpenChapterActivity` (invisible) marque lu puis ouvre le navigateur ; bouton
+   « Marquer lu » → `MarkReadReceiver`. `markReadIfCurrent` : seulement si le chapitre notifié
+   est encore le dernier connu (URL au domaine près, ou même numéro). Nom affiché de la source
+   en sous-texte. `ChapterNotifier.notificationsAllowed` (permission, app, canal) → bandeau
+   « Notifications désactivées » sur l'accueil (revérifié à chaque retour).
 8. **Sauvegarde** (v0.5.0) : `BackupController` (app) écrit `fresko-sauvegarde.json`
    (format `BackupFile` v1 dans `core/domain/backup`, JSON lisible) dans un dossier choisi
    via le sélecteur Android (accès persistant), à chaque changement (anti-rebond 3 s,
@@ -121,6 +146,12 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
    vide. Les curseurs de check ne sont pas sauvegardés (premier check = vérification par
    œuvre). L'Auto Backup Google d'Android (`allowBackup`) reste actif en complément, mais
    ne restaure que si la signature est la même.
+   **v1.0.0** : restaurer **ajoute seulement les œuvres absentes** (`WorkRepository.restore`),
+   les œuvres déjà suivies ne sont plus écrasées (recul des chapitres → alertes en double) ;
+   groupes d'une seule œuvre dissous. Choisir un dossier contenant une sauvegarde l'importe
+   **toujours** avant de réécrire le fichier (avant : si l'app suivait déjà une œuvre, la
+   sauvegarde existante était écrasée — perte de données) ; réglages repris seulement si l'app
+   était vide ; fichier illisible jamais écrasé. `BackupSettings.wifi_only` (optionnel).
 
 ### Couverture de la période
 
@@ -148,9 +179,10 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
 | Demonic | (plus utilisé depuis v0.2.0) | `translationlist.php?list=N` (leurs traductions ; 525 œuvres le 2026-10-15) |
 | Demonic | recherche | `search.php?manga=…` |
 | Demonic | dernier chapitre | `/manga/{slug}` (`#chapters-list li a`) |
-| NatoManga | recherche | `https://www.manganami.com/search/story/{alias}` (20 `div.story_item`, « Updated : Oct-14-2026 08:11 » en UTC) ; alias = `change_alias` de `/js/fsearch.js` |
-| NatoManga | dernier chapitre | `/api/manga/{slug}/chapters?limit=3` (JSON, `chapter_num`, `chapter_slug`, `updated_at` UTC ; slug inconnu → 400) |
-| NatoManga | URL chapitre | `/manga/{slug}/{chapter_slug}` |
+| NatoManga | recherche (2026-11-21) | `https://www.saiyanmanga.com/home/search/json?searchword={alias}` (JSON : `name`, `slug`, `thumb`, `chapterLatest` « Chapter 285 », pas de date ; 20 max) ; alias = `change_alias` de l'ancien `/js/fsearch.js` |
+| NatoManga | recherche (repli) | `/search/story/{alias}` : ancien format `div.story_item` (natomanga/manganami, « Updated : Oct-14-2026 08:11 » UTC) ou nouveau (saiyanmanga, Next.js : `h3 > a[href=/manga/slug]`, image, « Ch 285 ») |
+| NatoManga | dernier chapitre | `/api/manga/{slug}/chapters?limit=3` (JSON, `chapter_num`, `chapter_slug`, `updated_at` UTC — « 2026-11-14T11:47:21.000000Z » sur natomanga.com, « 2026-11-14 11:47:21 » sur saiyanmanga.com, même instant ; slug inconnu → 400) |
+| NatoManga | URL chapitre | `/manga/{slug}/{chapter_slug}` ; `chapter_slug` = « chapter-285 », décimal « chapter-195-1 » (vérifié) |
 
 - asuracomic.net → 301 vers asurascans.com.
 - Demonic agrège ≈ 250 pages × 56 œuvres sur `advanced.php` (page 240 pleine, 260 vide).
@@ -158,6 +190,12 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
   activées en parallèle ; résultats en mémoire (seules les œuvres suivies sont en base).
 - La recherche Demonic ne fournit pas de dernier chapitre ; ses URL de vignettes
   contiennent des espaces bruts (encodés en `%20` par le parser).
+- **2026-11-21 : www.manganami.com → 301 www.natumanga.com → 301 www.saiyanmanga.com**
+  (nouvelle interface Next.js, mêmes slugs et API). www.natomanga.com répond de nouveau 200
+  avec l'**ancienne** interface (même base de données : chapitre 285, mêmes vues) mais sans
+  `/home/search/json` → adresse par défaut = saiyanmanga.com. Test réel : partie de manganami,
+  la source a appris saiyanmanga seule (2 redirections), recherche JSON + API OK, pages
+  chapitre (dont `chapter-195-1`) et couvertures en 200.
 - **2026-11-06 : www.natomanga.com → 301 vers www.manganami.com** (mêmes slugs, mêmes API,
   vérifié en réel : recherche + `/api/manga/{slug}/chapters`). L'app appelle directement
   manganami (sinon `cf_clearance`, déposé sur le domaine final, n'était pas retrouvé :
@@ -181,7 +219,8 @@ Formule, cas courant (une page par source, les deux sources ont des œuvres suiv
 `octets/jour = (1440 / intervalle_min) × (18 965 + 15 919)` → à 10 min : 144 × 34 884 = 5 023 296 octets ≈ 5,0 Mo/jour.
 Une source sans œuvre suivie ne fait aucune requête. Valeurs variables selon le contenu des pages.
 
-NatoManga (mesuré le 2026-10-16) : 233 à 254 octets compressés par œuvre suivie et par check,
+NatoManga (mesuré le 2026-10-16 sur natomanga.com ; 221 à 231 octets le 2026-11-21 sur
+saiyanmanga.com, 3 œuvres, sous la borne haute) : 233 à 254 octets compressés par œuvre suivie et par check,
 soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (borne haute mesurée)
 → à 10 min avec 10 œuvres : 144 × 10 × 254 = 365 760 octets ≈ 0,37 Mo/jour.
 
@@ -189,6 +228,11 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 
 - `./gradlew test` (tests JVM), `./gradlew :app:assembleDebug|assembleRelease`.
 - AGP 8.7.3, Kotlin 2.1.0, Gradle 8.14.3, compileSdk/targetSdk 35, minSdk 26, JDK 17+.
+- Environnement Claude Code cloud : le conteneur peut être recréé entre deux sessions (SDK et
+  script d'init perdus le 2026-11-21) → réinstaller : script ci-dessous, puis
+  `commandlinetools-linux-11076708_latest.zip` (dl.google.com) dans
+  `/opt/android-sdk/cmdline-tools/latest`, `sdkmanager "platforms;android-35" "build-tools;35.0.0"
+  "platform-tools"`, `local.properties`. Premier build en ligne (pas `--offline`).
 - Environnement Claude Code cloud : Maven Central répond 429 via le proxy → script
   d'init **hors dépôt** `~/.gradle/init.d/central-mirror.gradle.kts` qui remplace
   Maven Central par `https://maven-central.storage-download.googleapis.com/maven2/`.
@@ -225,10 +269,10 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
 - Pas d'émulateur dans l'environnement de dev (pas de KVM) : UI et WorkManager
   **non testés sur appareil** à ce jour. Testés : parsers (fixtures réelles), logique
   de check (unitaires), appels réels aux deux sites (test de fumée JVM, non versionné),
-  rendu des écrans (captures Robolectric), migrations Room 1→2 et 2→3 (rejouées sur SQLite).
+  rendu des écrans (captures Robolectric), migrations Room 1→2 et 2→3 (rejouées sur SQLite),
+  requêtes Room des groupes / restauration / « lu » (`WorkRepositoryTest`, Robolectric, v1.0.0).
 - Le scraping dépend de la structure des sites : si un site change, seuls les
   fichiers de `sources/<site>/` sont à adapter (fixtures de test à recapturer).
-- Toucher une notification ouvre le chapitre mais ne le marque pas comme lu.
 - NatoManga est derrière Cloudflare. Depuis le serveur de dev, jamais de défi ; sur le
   téléphone de l'utilisateur, défi confirmé (2026-10-23) → mécanisme anti-robot v0.6.0
   (ci-dessous). Non testable ici de bout en bout (pas de WebView réelle sous Robolectric).
@@ -238,13 +282,14 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   (Android 11+) : il faut un sous-dossier.
 - Groupes multi-sources : pas de décalage de numérotation par source ; si le check initialise
   une source ajoutée (requête de référence en échec au moment du lien), sa référence est
-  marquée lue même si elle est en avance (cas limite non traité). Couche Room des groupes
-  (`WorkRepository`) non couverte par des tests automatiques (SQL relu, migration rejouée).
+  marquée lue même si elle est en avance (cas limite non traité).
+- Suivi de domaine : seulement NatoManga ; un domaine qui ne redirige pas (simple changement
+  annoncé sans 301) reste à corriger à la main (`DEFAULT_BASE_URL`). Non testable ici : les
+  actions de notification (activité / récepteur) sur appareil réel.
 - KSP : à la création d'un nouveau schéma Room, les variantes debug/release peuvent se
   concurrencer (« Empty schema file ») → lancer d'abord `:core:data:kspDebugKotlin` seul.
-- Pistes : écran « historique des chapitres », option Wi-Fi uniquement, export/import
-  des œuvres suivies, dernier chapitre dans les résultats de recherche Demonic,
-  marquer lu depuis la notification.
+- Pistes : écran « historique des chapitres », dernier chapitre dans les résultats de
+  recherche Demonic, décalage de numérotation par source dans un groupe.
 
 ## Journal
 
@@ -382,3 +427,27 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   par cohérence, pour le retrait d'une source (« × »). Capture 12 (le test de capture accepte
   désormais une interaction `interact` avant la prise). 64 tests, 0 échec ; `assembleRelease` OK.
 - Release v0.7.1 (versionCode 9).
+
+### 2026-11-21 — Session 12 : v1.0.0 (domaine NatoManga, passe de bugs, améliorations)
+- Demandes : NatoManga a encore changé de domaine ; passe de recherche de bugs et de
+  problèmes « si l'utilisateur sort des clous » ; idées d'amélioration, à faire aussi ;
+  release majeure et mise à jour des .md.
+- Domaine : manganami → natumanga → saiyanmanga, **nouvelle interface** (recherche HTML
+  illisible par l'ancien parser → recherche vide ; dates API dans un autre format). Fait :
+  recherche JSON + repli HTML double format, dates deux formats, suivi automatique du domaine
+  (voir point 12), URL enregistrées réécrites à l'ouverture.
+- Bugs corrigés : double notification (checks simultanés) ; site en panne → une attente par
+  œuvre (limite 10 min) ; **perte de sauvegarde** au choix du dossier après réinstallation ;
+  restauration qui écrasait les œuvres suivies ; spinner infini hors connexion ; badge
+  « Anticipé » figé ; retour Android qui quittait pendant une recherche ; recherche sans source
+  activée = écran vide ; lien sans navigateur = rien ; sous-texte de notification « natomanga ».
+- Améliorations : marquer lu depuis la notification (toucher / bouton), bandeau notifications
+  coupées, Wi-Fi uniquement, « Rechercher l'œuvre à nouveau », adresse du site dans les
+  réglages, état de « Vérifier maintenant », référence au suivi remplacée par la réponse
+  dédiée à numéro égal (URL et date exactes).
+- Conteneur recréé : SDK Android et script de miroir réinstallés (voir Build).
+- Tests : **85 tests unitaires distincts, 0 échec** (64 en v0.7.1) — dont NatoManga 15,
+  UpdateChecker 24, `WorkRepositoryTest` 5 (Room réelle sous Robolectric), `OkHttpFetcherTest` 1
+  (redirection entre deux serveurs locaux) ; `assembleRelease` (R8) OK. Captures 13 (bandeaux)
+  et 14 (sans source) ; test de fumée réel du suivi de domaine.
+- README mis à jour. Release v1.0.0 (versionCode 10). Non testé sur appareil.

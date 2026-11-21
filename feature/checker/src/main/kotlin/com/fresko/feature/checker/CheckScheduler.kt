@@ -27,13 +27,18 @@ class CheckScheduler(context: Context) {
 
     private val workManager = WorkManager.getInstance(context.applicationContext)
 
-    private val constraints = Constraints.Builder()
-        .setRequiredNetworkType(NetworkType.CONNECTED)
+    /** Réseau requis : Wi-Fi (réseau non facturé à l'usage) si [wifiOnly], sinon n'importe lequel. */
+    private fun constraints(wifiOnly: Boolean) = Constraints.Builder()
+        .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
         .setRequiresBatteryNotLow(true)
         .build()
 
-    /** @param replace true quand l'utilisateur change l'intervalle. */
-    fun schedule(intervalMinutes: Int, replace: Boolean) {
+    /**
+     * @param replace true quand l'utilisateur change un réglage (intervalle, Wi-Fi uniquement).
+     * @param wifiOnly vérifications automatiques seulement sur un réseau non facturé (Wi-Fi).
+     */
+    fun schedule(intervalMinutes: Int, replace: Boolean, wifiOnly: Boolean = false) {
+        val constraints = constraints(wifiOnly)
         if (intervalMinutes >= PERIODIC_MIN_MINUTES) {
             workManager.cancelUniqueWork(CHAIN_WORK)
             val request = PeriodicWorkRequestBuilder<CheckWorker>(
@@ -49,23 +54,23 @@ class CheckScheduler(context: Context) {
             workManager.enqueueUniqueWork(
                 CHAIN_WORK,
                 if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
-                chainRequest(intervalMinutes),
+                chainRequest(intervalMinutes, constraints),
             )
         }
     }
 
     /** Appelé par le worker à la fin d'un maillon de la chaîne (< 15 min). */
-    internal fun scheduleNextInChain(intervalMinutes: Int) {
+    internal fun scheduleNextInChain(intervalMinutes: Int, wifiOnly: Boolean) {
         // APPEND_OR_REPLACE : le maillon suivant démarre après la fin de celui en cours
         // (REPLACE annulerait le worker qui est en train de s'exécuter).
         workManager.enqueueUniqueWork(
             CHAIN_WORK,
             ExistingWorkPolicy.APPEND_OR_REPLACE,
-            chainRequest(intervalMinutes),
+            chainRequest(intervalMinutes, constraints(wifiOnly)),
         )
     }
 
-    /** Check immédiat demandé par l'utilisateur. */
+    /** Check immédiat demandé par l'utilisateur (tout réseau, même si « Wi-Fi uniquement »). */
     fun checkNow() {
         val request = OneTimeWorkRequestBuilder<CheckWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -73,13 +78,22 @@ class CheckScheduler(context: Context) {
         workManager.enqueueUniqueWork(MANUAL_WORK, ExistingWorkPolicy.KEEP, request)
     }
 
-    /** True tant qu'un check manuel est en attente ou en cours. */
-    fun observeManualCheck(): Flow<Boolean> =
+    /** État du check manuel : en cours, en attente (pas de réseau), ou aucun. */
+    fun observeManualCheck(): Flow<ManualCheck> =
         workManager.getWorkInfosForUniqueWorkFlow(MANUAL_WORK).map { infos ->
-            infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+            when {
+                infos.any { it.state == WorkInfo.State.RUNNING } -> ManualCheck.RUNNING
+                infos.any { it.state == WorkInfo.State.ENQUEUED } -> ManualCheck.WAITING
+                else -> ManualCheck.IDLE
+            }
         }
 
-    private fun chainRequest(intervalMinutes: Int) = OneTimeWorkRequestBuilder<CheckWorker>()
+    /** Annule un check manuel qui attend le réseau. */
+    fun cancelManualCheck() {
+        workManager.cancelUniqueWork(MANUAL_WORK)
+    }
+
+    private fun chainRequest(intervalMinutes: Int, constraints: Constraints) = OneTimeWorkRequestBuilder<CheckWorker>()
         .setInitialDelay(intervalMinutes.toLong(), TimeUnit.MINUTES)
         .setConstraints(constraints)
         .setInputData(workDataOf(CheckWorker.KEY_CHAINED to true))
@@ -92,3 +106,6 @@ class CheckScheduler(context: Context) {
         private const val MANUAL_WORK = "fresko_check_manual"
     }
 }
+
+/** Check demandé par l'utilisateur. WAITING : en file, typiquement faute de réseau. */
+enum class ManualCheck { IDLE, WAITING, RUNNING }

@@ -8,6 +8,7 @@ import com.fresko.core.model.WorkKey
 import com.fresko.core.source.RecentUpdates
 import com.fresko.core.source.Source
 import com.fresko.core.source.UpdateCursor
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -32,8 +33,10 @@ class UpdateCheckerTest {
         override val displayName = "Fake"
         val perWorkCalls = mutableListOf<WorkKey>()
         override suspend fun search(query: String) = emptyList<WorkInfo>()
+        var perWorkDelay = 0L
         override suspend fun fetchLatestChapter(key: WorkKey): ChapterInfo? {
             perWorkCalls += key
+            if (perWorkDelay > 0) kotlinx.coroutines.delay(perWorkDelay)
             if (failPerWork) throw perWorkError
             return perWork[key]
         }
@@ -281,5 +284,61 @@ class UpdateCheckerTest {
         val s1 = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to noNumber))
         val report = UpdateChecker(listOf(s1), store, store, store).check()
         assertEquals(1, report.newChapters.size)
+    }
+
+    // --- Robustesse (v1.0.0) ---
+
+    @Test
+    fun `site injoignable - verification de la source interrompue, erreur de source`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0)), tracked("b", ch(1.0)), tracked("c", ch(1.0))))
+        val source = FakeSource(src, RecentUpdates(emptyMap(), false), failPerWork = true,
+            perWorkError = java.net.SocketTimeoutException("délai"))
+        val report = UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(1, source.perWorkCalls.size) // pas 3 délais d'attente
+        assertTrue(report.errors.containsKey(src))
+        assertTrue(store.sourceErrors.getValue(src).contains("délai"))
+        assertTrue(store.works.values.all { it.checkError == null })
+        assertTrue(store.cursors.isEmpty())
+    }
+
+    @Test
+    fun `oeuvre introuvable - les autres oeuvres sont quand meme verifiees`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0)), tracked("b", ch(1.0))))
+        val source = FakeSource(src, RecentUpdates(emptyMap(), false), failPerWork = true,
+            perWorkError = com.fresko.core.network.HttpException(404, "u"))
+        UpdateChecker(listOf(source), store, store, store).check()
+        assertEquals(2, source.perWorkCalls.size)
+        assertTrue(store.sourceErrors.isEmpty())
+    }
+
+    @Test
+    fun `deux checks simultanes - une seule notification`() = runTest {
+        val store = Store(listOf(tracked("a", ch(1.0))))
+        val source = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to ch(2.0)))
+            .apply { perWorkDelay = 50 }
+        val checker = UpdateChecker(listOf(source), store, store, store)
+        val reports = listOf(
+            async { checker.check() },
+            async { checker.check() },
+        ).map { it.await() }
+        assertEquals(1, reports.sumOf { it.newChapters.size })
+    }
+
+    @Test
+    fun `chapitre devenu gratuit - badge mis a jour sans notification`() = runTest {
+        val store = Store(listOf(tracked("a", ch(11.0, early = true)))).apply { cursors[src] = UpdateCursor(1_000, emptySet()) }
+        val source = FakeSource(src, RecentUpdates(mapOf(key("a") to listOf(ch(11.0))), true))
+        val report = UpdateChecker(listOf(source), store, store, store).check()
+        assertTrue(report.newChapters.isEmpty())
+        assertTrue(!store.works.getValue(key("a")).lastKnownChapter!!.isEarlyAccess)
+    }
+
+    @Test
+    fun `chapitre sans numero - changement de domaine du site n'est pas une nouveaute`() = runTest {
+        val old = ChapterInfo(null, "Épilogue", "https://ancien.example/manga/x/epilogue")
+        val same = ChapterInfo(null, "Épilogue", "https://nouveau.example/manga/x/epilogue")
+        val store = Store(listOf(tracked("a", old)))
+        val source = FakeSource(src, RecentUpdates(emptyMap(), false), perWork = mapOf(key("a") to same))
+        assertTrue(UpdateChecker(listOf(source), store, store, store).check().newChapters.isEmpty())
     }
 }

@@ -17,7 +17,9 @@ class OkHttpFetcher(
     private val userAgent: String = DEFAULT_USER_AGENT,
 ) : HttpFetcher {
 
-    override suspend fun get(url: String, headers: Map<String, String>): String =
+    override suspend fun get(url: String, headers: Map<String, String>): String = fetch(url, headers).body
+
+    override suspend fun fetch(url: String, headers: Map<String, String>): HttpResult =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url(url)
@@ -35,7 +37,8 @@ class OkHttpFetcher(
                     }
                     throw HttpException(response.code, url)
                 }
-                response.body?.string().orEmpty()
+                // response.request = dernière requête de la chaîne de redirections.
+                HttpResult(response.body?.string().orEmpty(), response.request.url.toString())
             }
         }
 

@@ -8,6 +8,7 @@ android {
     namespace = "com.fresko.core.data"
     compileSdk = 35
     defaultConfig { minSdk = 26 }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -30,4 +31,12 @@ dependencies {
     api(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.coroutines.test)
+}
+
+// Robolectric télécharge Android depuis le miroir Google de Maven Central (cf. module app).
+tasks.withType<Test>().configureEach {
+    systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
 }

@@ -68,5 +68,16 @@ fun ChapterInfo.isNewerThan(known: ChapterInfo?): Boolean {
     val a = number
     val b = known.number
     if (a != null && b != null) return a > b
-    return url != known.url
+    return !sameLocation(url, known.url)
+}
+
+/**
+ * Même page, au domaine près : un site qui change de domaine (NatoManga) garde ses chemins ;
+ * sans cela, un chapitre sans numéro serait pris pour une nouveauté après le changement.
+ */
+fun sameLocation(a: String, b: String): Boolean {
+    if (a == b) return true
+    val pa = runCatching { java.net.URI(a) }.getOrNull() ?: return false
+    val pb = runCatching { java.net.URI(b) }.getOrNull() ?: return false
+    return pa.rawPath == pb.rawPath && pa.rawQuery == pb.rawQuery && pa.rawPath != null
 }
