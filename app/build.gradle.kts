@@ -12,8 +12,8 @@ android {
         applicationId = "com.fresko.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.0"
+        versionCode = 11
+        versionName = "1.1.0"
     }
 
     // Signature : clé fournie par la CI (secrets GitHub) si présente, sinon clé debug.

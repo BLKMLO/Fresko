@@ -488,4 +488,5 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   aucune réponse normale du site prise pour un défi (recherche, API, 404 d'œuvre inconnue).
 - Cause exacte du blocage sur le téléphone **non observée** (le serveur de dev n'est jamais
   challengé) : correctifs sur les cas plausibles ci-dessus, à confirmer sur appareil.
-- 96 tests unitaires distincts, 0 échec ; `assembleRelease` OK. Pas de release (non demandée).
+- 96 tests unitaires distincts, 0 échec ; `assembleRelease` OK. Release v1.1.0 demandée
+  ensuite par l'utilisateur (versionCode 11).
