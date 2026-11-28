@@ -7,7 +7,9 @@ jamais sur une autre branche.
 ## Objectif
 
 App Android peu gourmande en batterie qui vérifie toutes les X minutes (10 par
-défaut) si un chapitre d'une œuvre suivie est sorti, sur Asura Scans, Demonic Scans et NatoManga.
+défaut) si un chapitre d'une œuvre suivie est sorti, sur Asura Scans, Demonic Scans et SaiyanManga
+(ex-NatoManga : nom affiché depuis 2026-11-28 ; identifiant interne, module et classe restent
+`natomanga` / `NatoMangaSource`, car l'identifiant est stocké en base, sauvegardes et réglages).
 Depuis la v0.2.0, **la recherche est le seul moyen de trouver une œuvre** (plus de catalogue).
 
 ## Architecture (Gradle multi-modules)
@@ -96,6 +98,24 @@ Rien d'autre à toucher (UI, check, réglages sont génériques).
      se ferme dès qu'un nouveau `cf_clearance` apparaît (puis recherche + check relancés).
    - Tests Robolectric `ChallengeAwareFetcherTest` (6) ; `robolectric.dependency.repo.url`
      pointe désormais toujours vers le miroir Google de Maven Central.
+   - **2026-11-28** (« l'anti-bot n'est parfois pas détecté et bloque recherche et
+     rafraîchissement ») — défis manqués avant : `cf-mitigated` hors 403/429/503 ; page de défi
+     en **200** ; **HTML à la place du JSON** (les API répondent `application/json`, vérifié ;
+     l'erreur finissait en « réponse inattendue » / recherche vide). `CloudflareDetector` :
+     `cf-mitigated` quel que soit le code ; 200 + marqueurs forts seulement (`_cf_chl_opt`,
+     `<title>Just a moment`, `orchestrate/chl_page` — pas `challenge-platform`, injecté aussi dans
+     des pages normales) ; `Accept: application/json` (`OkHttpFetcher.JSON_HEADERS`, envoyé par la
+     source) + HTML Cloudflare en 2xx/403/429/503 = défi (un 404 HTML = route inconnue, et une
+     œuvre inconnue renvoie désormais **404 JSON** « Comic not found », plus 400).
+   - **Repli WebView** (`WebViewPageFetcher`) : si le client HTTP reste bloqué après un cookie
+     obtenu (l'autorisation peut dépendre de l'empreinte du navigateur), la page est chargée
+     dans une WebView invisible (images coupées) et lue par JS (`PageSnapshot` : JSON brut du
+     `<pre>` ou HTML). Échec → pas de nouvel essai avant 10 min ; résolution invisible en échec
+     → pas de repli (évite ~1 min d'attente de la recherche). Non testable ici (pas de vraie
+     WebView) : logique testée avec des faux, lecture de page testée sous Robolectric.
+   - La vérification ouvre désormais **la page bloquée** (avant : l'accueil, qui peut ne pas
+     être protégé) ; bouton **« Terminé »** dans l'écran de vérification (s'il ne se ferme pas
+     seul : défi déjà passé, protection non Cloudflare) → recherche et check relancés.
 10. **Erreurs de check** (v0.7.0) : un échec de la requête dédiée à
    une œuvre (exception, ou source qui ne renvoie aucun chapitre) est enregistré sur l'œuvre
    (`check_error`, `check_error_at`, Room v4) ; l'œuvre est réinterrogée à chaque check tant
@@ -292,6 +312,8 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   actions de notification (activité / récepteur) sur appareil réel.
 - KSP : à la création d'un nouveau schéma Room, les variantes debug/release peuvent se
   concurrencer (« Empty schema file ») → lancer d'abord `:core:data:kspDebugKotlin` seul.
+- Repli WebView : une requête par œuvre SaiyanManga passe alors par la WebView à chaque check
+  tant que le client HTTP est bloqué (plus lent et plus gourmand ; non mesuré).
 - Pistes : écran « historique des chapitres », dernier chapitre dans les résultats de
   recherche Demonic, décalage de numérotation par source dans un groupe.
 
@@ -455,3 +477,15 @@ soit `octets/jour ≈ (1440 / intervalle_min) × N_œuvres_NatoManga × 254` (bo
   (redirection entre deux serveurs locaux) ; `assembleRelease` (R8) OK. Captures 13 (bandeaux)
   et 14 (sans source) ; test de fumée réel du suivi de domaine.
 - README mis à jour. Release v1.0.0 (versionCode 10). Non testé sur appareil.
+
+### 2026-11-28 — Session 13 : SaiyanManga, anti-robot
+- Demandes : renommer de façon permanente NatoManga en « saiyenmanga » (nom du site :
+  **SaiyanManga**, retenu) en gardant le suivi des changements de domaine ; résoudre l'anti-bot
+  « parfois pas détecté » qui bloque recherche et rafraîchissement.
+- Domaine inchangé depuis le 2026-11-21 (manganami → natumanga → saiyanmanga, vérifié).
+- Fait : nom affiché SaiyanManga (identifiant interne inchangé, voir Objectif) ; détection
+  élargie, repli WebView, page bloquée ouverte, bouton « Terminé » (voir point 9). Test réel :
+  aucune réponse normale du site prise pour un défi (recherche, API, 404 d'œuvre inconnue).
+- Cause exacte du blocage sur le téléphone **non observée** (le serveur de dev n'est jamais
+  challengé) : correctifs sur les cas plausibles ci-dessus, à confirmer sur appareil.
+- 96 tests unitaires distincts, 0 échec ; `assembleRelease` OK. Pas de release (non demandée).

@@ -5,7 +5,7 @@
 **Soyez prévenu dès qu'un chapitre sort — sans vider votre batterie.**
 
 Fresko surveille en arrière-plan les webtoons que vous suivez sur
-Asura Scans, Demonic Scans et NatoManga, et vous envoie une notification
+Asura Scans, Demonic Scans et SaiyanManga (ex-NatoManga), et vous envoie une notification
 dès qu'un nouveau chapitre est publié. Un appui, et vous lisez.
 
 [Télécharger](https://github.com/BLKMLO/Fresko/releases/latest) ·
@@ -26,7 +26,7 @@ dès qu'un nouveau chapitre est publié. Un appui, et vous lisez.
   │ La Tour sans fin              Asura   Nouveau        │
   │ Chapitre 142                          Anticipé       │
   ├──────────────────────────────────────────────────────┤
-  │ Le Dernier Héritier           NatoManga   Nouveau    │
+  │ Le Dernier Héritier         SaiyanManga   Nouveau    │
   │ Chapitre 87                                          │
   └──────────────────────────────────────────────────────┘
 
@@ -65,8 +65,8 @@ ce dossier restaure tout — sans jamais écraser une sauvegarde plus complète.
 une seule carte, et une seule alerte par chapitre, celle du premier site qui le
 publie.
 
-**Un site déménage ? Fresko suit.** Quand un site change de domaine (NatoManga
-l'a fait trois fois en un mois), Fresko suit la redirection, retient la nouvelle
+**Un site déménage ? Fresko suit.** Quand un site change de domaine (SaiyanManga,
+ex-NatoManga, l'a fait trois fois en un mois), Fresko suit la redirection, retient la nouvelle
 adresse et réécrit les liens déjà enregistrés.
 
 **Les problèmes se voient.** Une œuvre introuvable, un site en panne ou bloqué :
@@ -83,7 +83,7 @@ vérification réessaie d'elle-même.
 | 🔗 **Plusieurs sources** | Fiche → « Ajouter une source » → « Lier » : la même œuvre sur plusieurs sites, une seule alerte par chapitre. |
 | 🔔 **Notifications** | Une par nouveau chapitre ; un appui ouvre le chapitre **et le marque lu** ; bouton « Marquer lu » sans l'ouvrir. Bandeau sur l'accueil si les notifications sont coupées. |
 | ⚠ **Erreurs visibles** | Œuvre introuvable, site injoignable ou bloqué : affiché sur la carte, dans la fiche, sur l'accueil et dans les réglages ; « Rechercher l'œuvre à nouveau » en un appui. |
-| 🛡 **Anti-robot** | Vérification Cloudflare passée seule en arrière-plan, sinon une fois à la main ; le cookie est ensuite réutilisé. |
+| 🛡 **Anti-robot** | Pages de vérification Cloudflare reconnues (y compris servies à la place des données) ; passées seules en arrière-plan, sinon chargées comme dans un navigateur, sinon une fois à la main (« Terminé » si l'écran ne se ferme pas seul). |
 | ↻ **Vérification immédiate** | Tirer l'écran principal vers le bas ; hors connexion, elle attend le réseau (annulable). |
 | 💾 **Sauvegarde** | Fichier hors de l'app, mis à jour automatiquement (Réglages → Sauvegarde) ; une restauration ajoute les œuvres manquantes sans toucher aux autres. |
 | ⚙ **Réglages** | Sources activables une à une (adresse du site affichée), fréquence, Wi-Fi uniquement, « Vérifier maintenant ». |
@@ -131,7 +131,7 @@ chapitre sort, l'œuvre passe dans « À lire » et une notification arrive :
 |---|---|---|---|
 | **Asura Scans** | asurascans.com (ex-asuracomic.net) | ✓ par œuvre | liste des mises à jour |
 | **Demonic Scans** | demonicscans.org | — | liste des mises à jour |
-| **NatoManga** | saiyanmanga.com (ex-natomanga.com, manganami.com) — adresse suivie automatiquement | — | une requête par œuvre suivie |
+| **SaiyanManga** (ex-NatoManga) | saiyanmanga.com (ex-natomanga.com, manganami.com) — adresse suivie automatiquement | — | une requête par œuvre suivie |
 
 ## Fréquence et batterie
 
@@ -155,7 +155,7 @@ octets/jour = (1440 / intervalle_min) × (18 965 + 15 919)
             = 144 × 34 884 = 5 023 296 octets ≈ 5,0 Mo/jour   (à 10 min)
 ```
 
-NatoManga : 233 à 254 octets par œuvre suivie et par vérification (mesuré le
+SaiyanManga (ex-NatoManga) : 233 à 254 octets par œuvre suivie et par vérification (mesuré le
 2026-10-16 sur natomanga.com), 221 à 231 octets (mesuré le 2026-11-21 sur
 saiyanmanga.com, 3 œuvres). La formule garde la borne haute mesurée, 254 octets.
 

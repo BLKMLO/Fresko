@@ -9,7 +9,6 @@ import com.fresko.core.model.SourceId
 import com.fresko.core.model.WorkInfo
 import com.fresko.core.model.WorkKey
 import com.fresko.core.model.isNewerThan
-import com.fresko.app.net.ChallengeRegistry
 import com.fresko.core.network.CloudflareChallengeException
 import com.fresko.core.network.HttpException
 import com.fresko.feature.checker.ManualCheck
@@ -365,7 +364,7 @@ class LibraryViewModel(private val c: AppContainer) : ViewModel() {
                     Slot(
                         loading = false, failed = true, results = emptyList(),
                         error = "${source.displayName} demande une vérification anti-robot.",
-                        challengeUrl = ChallengeRegistry.rootOf(e.url),
+                        challengeUrl = e.url,
                     )
                 } catch (e: Exception) {
                     Slot(loading = false, failed = true, results = emptyList(), error = describeError(e))

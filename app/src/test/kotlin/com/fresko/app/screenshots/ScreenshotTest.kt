@@ -48,7 +48,7 @@ class ScreenshotTest {
     private val now = System.currentTimeMillis()
     private val asura = SourceUi(SourceId("asura"), "Asura Scans", hasEarlyAccess = true)
     private val demonic = SourceUi(SourceId("demonic"), "Demonic Scans", hasEarlyAccess = false)
-    private val nato = SourceUi(SourceId("natomanga"), "NatoManga", hasEarlyAccess = false)
+    private val nato = SourceUi(SourceId("natomanga"), "SaiyanManga", hasEarlyAccess = false)
 
     private fun work(src: SourceUi, key: String, title: String, ch: Double, agoMin: Long, early: Boolean = false, notifyEarly: Boolean = true, read: Boolean = false) =
         TrackedItem(

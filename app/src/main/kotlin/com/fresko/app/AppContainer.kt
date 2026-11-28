@@ -12,6 +12,7 @@ import com.fresko.app.net.CloudflareSolver
 import com.fresko.app.net.SiteAddressPrefs
 import com.fresko.app.net.WebUserAgent
 import com.fresko.app.net.WebViewCookieJar
+import com.fresko.app.net.WebViewPageFetcher
 import com.fresko.app.notify.AppChapterActions
 import com.fresko.core.model.SourceId
 import com.fresko.core.network.HttpFetcher
@@ -35,6 +36,7 @@ class AppContainer(context: Context) {
         delegate = OkHttpFetcher(client = httpClient, userAgent = userAgent),
         solver = solver,
         registry = challenges,
+        pages = WebViewPageFetcher(appContext),
     )
     val sources = SourceRegistry(http, SiteAddressPrefs(appContext))
 
@@ -83,7 +85,7 @@ class AppContainer(context: Context) {
             if (challenges.shouldNotify(e.url)) {
                 notifier.notifyChallenge(
                     ChallengeRegistry.hostOf(e.url) ?: e.url,
-                    ChallengeActivity.intent(appContext, ChallengeRegistry.rootOf(e.url)),
+                    ChallengeActivity.intent(appContext, e.url),
                 )
             }
         },

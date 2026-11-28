@@ -27,16 +27,26 @@ class OkHttpFetcher(
                 .apply { headers.forEach { (k, v) -> header(k, v) } }
                 .build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
+                val server = response.header("server")
+                val contentType = response.header("content-type")
+                val expectsJson = headers.entries.any {
+                    it.key.equals("Accept", ignoreCase = true) && it.value.contains("json", ignoreCase = true)
+                }
+                // Le corps n'est lu (8 Ko au plus, sans le consommer) que pour une réponse Cloudflare
+                // suspecte : échec, ou HTML (une page normale ne coûte qu'une recherche de marqueurs).
+                val suspect = !response.isSuccessful ||
+                    (server?.contains("cloudflare", ignoreCase = true) == true &&
+                        contentType?.contains("html", ignoreCase = true) == true)
+                if (suspect) {
                     val bodyStart = runCatching { response.peekBody(PEEK_BYTES).string() }.getOrDefault("")
                     if (CloudflareDetector.isChallenge(
-                            response.code, response.header("cf-mitigated"), response.header("server"), bodyStart,
+                            response.code, response.header("cf-mitigated"), server, bodyStart, contentType, expectsJson,
                         )
                     ) {
                         throw CloudflareChallengeException(response.code, url)
                     }
-                    throw HttpException(response.code, url)
                 }
+                if (!response.isSuccessful) throw HttpException(response.code, url)
                 // response.request = dernière requête de la chaîne de redirections.
                 HttpResult(response.body?.string().orEmpty(), response.request.url.toString())
             }
@@ -44,6 +54,9 @@ class OkHttpFetcher(
 
     companion object {
         private const val PEEK_BYTES = 8_192L
+
+        /** En-tête à envoyer aux API JSON : une page HTML en retour sera reconnue comme défi. */
+        val JSON_HEADERS = mapOf("Accept" to "application/json")
 
         const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +

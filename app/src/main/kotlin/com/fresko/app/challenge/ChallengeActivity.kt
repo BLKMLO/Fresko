@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,7 +43,7 @@ import com.fresko.app.ui.theme.FreskoTheme
 import kotlinx.coroutines.delay
 
 /**
- * Affiche le site pour que l'utilisateur passe la vérification anti-robot (Cloudflare).
+ * Affiche la page bloquée pour que l'utilisateur passe la vérification anti-robot (Cloudflare).
  * Dès qu'un nouveau cookie `cf_clearance` apparaît, il est enregistré et l'écran se ferme
  * (RESULT_OK) : les requêtes de l'app le réutilisent ensuite.
  */
@@ -84,6 +85,16 @@ class ChallengeActivity : ComponentActivity() {
                                     Icon(Icons.Filled.Close, contentDescription = "Fermer")
                                 }
                             },
+                            // Le site s'affiche normalement mais l'écran ne s'est pas fermé (pas de
+                            // nouveau cookie : défi déjà passé, ou protection autre que Cloudflare) :
+                            // l'utilisateur confirme, la recherche et la vérification sont relancées.
+                            actions = {
+                                TextButton(onClick = {
+                                    cookies.flush()
+                                    setResult(Activity.RESULT_OK)
+                                    finish()
+                                }) { Text("Terminé") }
+                            },
                         )
                     },
                 ) { padding ->
@@ -91,7 +102,8 @@ class ChallengeActivity : ComponentActivity() {
                         Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 "Le site vérifie que vous n'êtes pas un robot. Faites la vérification " +
-                                    "ci-dessous : cette page se fermera toute seule ensuite.",
+                                    "ci-dessous : cette page se fermera toute seule ensuite. Si le site " +
+                                    "s'affiche sans se fermer, touchez « Terminé ».",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),

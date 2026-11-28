@@ -7,6 +7,7 @@ import com.fresko.core.model.WorkKey
 import com.fresko.core.network.HttpException
 import com.fresko.core.network.HttpFetcher
 import com.fresko.core.network.HttpResult
+import com.fresko.core.network.OkHttpFetcher
 import com.fresko.core.source.NoAddressStore
 import com.fresko.core.source.RecentUpdates
 import com.fresko.core.source.SiteAddressStore
@@ -29,7 +30,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * NatoManga / MangaNato : le site change régulièrement de domaine.
+ * SaiyanManga (ex-NatoManga / MangaNato) : le site change régulièrement de domaine.
  * - jusqu'au 2026-11-06 : www.natomanga.com ;
  * - 2026-11-06 : www.manganami.com (natomanga.com y redirigeait) ;
  * - 2026-11-21 : manganami → www.natumanga.com → **www.saiyanmanga.com**, nouvelle
@@ -56,7 +57,12 @@ class NatoMangaSource(
 ) : Source {
 
     override val id = ID
-    override val displayName = "NatoManga"
+    /**
+     * Nom affiché : **SaiyanManga** depuis la v1.1.0 (le site s'appelle ainsi sur son nouveau
+     * domaine). L'identifiant interne reste « natomanga » : il est enregistré dans la base, les
+     * sauvegardes et les réglages ; le changer les rendrait illisibles.
+     */
+    override val displayName = "SaiyanManga"
 
     private val addressKey = "${ID.value}|$defaultBaseUrl"
 
@@ -73,7 +79,7 @@ class NatoMangaSource(
         if (alias.isEmpty()) return emptyList()
         // 1) Recherche JSON du nouveau site ; 2) repli HTML (ancien ou nouveau format).
         val fromJson = try {
-            parseSearchJson(get("/home/search/json?searchword=$alias").body)
+            parseSearchJson(get("/home/search/json?searchword=$alias", json = true).body)
         } catch (e: HttpException) {
             if (e.code in 500..599 || e.code == 403 || e.code == 429) throw e // site en panne / bloqué
             null // point d'accès absent (ancien site) : repli HTML
@@ -86,7 +92,7 @@ class NatoMangaSource(
     }
 
     override suspend fun fetchLatestChapter(key: WorkKey): ChapterInfo? {
-        val body = get("/api/manga/${key.key}/chapters?limit=$CHAPTERS_LIMIT").body
+        val body = get("/api/manga/${key.key}/chapters?limit=$CHAPTERS_LIMIT", json = true).body
         val chapters = json.decodeFromString(ChaptersResponse.serializer(), body).data?.chapters.orEmpty()
         val latest = chapters.filter { it.chapterNum != null }.maxByOrNull { it.chapterNum!! }
             ?: chapters.firstOrNull()
@@ -114,9 +120,13 @@ class NatoMangaSource(
     }
 
     /** GET sur l'adresse actuelle ; une redirection vers un autre domaine (même chemin) est mémorisée. */
-    private suspend fun get(pathAndQuery: String): HttpResult {
+    /**
+     * @param json réponse JSON attendue : l'en-tête `Accept` permet de reconnaître une page
+     *   anti-robot servie à la place des données (voir `CloudflareDetector`).
+     */
+    private suspend fun get(pathAndQuery: String, json: Boolean = false): HttpResult {
         val base = baseUrl
-        val result = http.fetch(base + pathAndQuery)
+        val result = http.fetch(base + pathAndQuery, if (json) OkHttpFetcher.JSON_HEADERS else emptyMap())
         movedTo(base + pathAndQuery, result.finalUrl)?.let { addresses.set(addressKey, it) }
         return result
     }

@@ -25,8 +25,10 @@ class NatoMangaSourceTest {
 
     private class FakeHttp(val routes: (String) -> String) : HttpFetcher {
         val calls = mutableListOf<String>()
+        val headers = mutableListOf<Map<String, String>>()
         override suspend fun get(url: String, headers: Map<String, String>): String {
             calls += url
+            this.headers += headers
             return routes(url)
         }
     }
@@ -190,5 +192,21 @@ class NatoMangaSourceTest {
         assertTrue(updates.recentByKey.isEmpty())
         assertFalse(updates.coversCursor)
         assertTrue(http.calls.isEmpty())
+    }
+
+    @Test
+    fun `nom affiche SaiyanManga, identifiant interne inchange`() {
+        val source = NatoMangaSource(FakeHttp { "" })
+        assertEquals("SaiyanManga", source.displayName)
+        assertEquals("natomanga", source.id.value) // base, sauvegardes, réglages
+    }
+
+    @Test
+    fun `appels JSON annonces comme tels (detection d'une page anti-robot a la place)`() = runTest {
+        val http = FakeHttp { url -> if ("/api/" in url) resource("saiyan-chapters.json") else resource("saiyan-search.json") }
+        val source = NatoMangaSource(http)
+        source.search("solo")
+        source.fetchLatestChapter(WorkKey(NatoMangaSource.ID, "solo-max-level-newbie"))
+        assertTrue(http.headers.all { it["Accept"] == "application/json" })
     }
 }

@@ -26,14 +26,16 @@ class ChallengeRegistry(context: Context) {
     fun markPending(url: String) {
         val host = hostOf(url) ?: return
         if (_pending.value[host] != null) return
-        prefs.edit().putString(PENDING + host, rootOf(url)).apply()
-        _pending.value = _pending.value + (host to rootOf(url))
+        // On garde la page qui a été bloquée (pas l'accueil) : le défi peut ne porter que sur
+        // certaines adresses (API, recherche), et c'est là que le cookie doit être obtenu.
+        prefs.edit().putString(PENDING + host, url).apply()
+        _pending.value = _pending.value + (host to url)
     }
 
     fun clear(url: String) {
         val host = hostOf(url) ?: return
         if (_pending.value[host] == null) return
-        prefs.edit().remove(PENDING + host).remove(NOTIFIED + host).apply()
+        prefs.edit().remove(PENDING + host).remove(NOTIFIED + host).remove(WEB_FAILED + host).apply()
         _pending.value = _pending.value - host
     }
 
@@ -45,6 +47,21 @@ class ChallengeRegistry(context: Context) {
         if (now - last < HEADLESS_COOLDOWN) return false
         prefs.edit().putLong(HEADLESS + host, now).apply()
         return true
+    }
+
+    /**
+     * Repli par la WebView (voir [ChallengeAwareFetcher]) : après un échec (défi interactif),
+     * on ne réessaie pas avant 10 min, pour ne pas attendre le délai à chaque requête.
+     */
+    @Synchronized
+    fun webFallbackAllowed(url: String, now: Long = System.currentTimeMillis()): Boolean {
+        val host = hostOf(url) ?: return false
+        return now - prefs.getLong(WEB_FAILED + host, 0) >= WEB_COOLDOWN
+    }
+
+    fun webFallbackFailed(url: String, now: Long = System.currentTimeMillis()) {
+        val host = hostOf(url) ?: return
+        prefs.edit().putLong(WEB_FAILED + host, now).apply()
     }
 
     /** Une notification par site toutes les 6 h au plus. */
@@ -66,6 +83,8 @@ class ChallengeRegistry(context: Context) {
         private const val PENDING = "pending_"
         private const val HEADLESS = "headless_"
         private const val NOTIFIED = "notified_"
+        private const val WEB_FAILED = "webfailed_"
+        private const val WEB_COOLDOWN = 10 * 60 * 1000L
         private const val HEADLESS_COOLDOWN = 30 * 60 * 1000L
         private const val NOTIFY_COOLDOWN = 6 * 3600 * 1000L
         /**

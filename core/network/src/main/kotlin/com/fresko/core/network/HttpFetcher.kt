@@ -29,17 +29,47 @@ open class HttpException(val code: Int, val url: String) : IOException("HTTP $co
  */
 class CloudflareChallengeException(code: Int, url: String) : HttpException(code, url)
 
-/** Reconnaît une page de défi Cloudflare (logique pure, testée). */
+/**
+ * Reconnaît une page anti-robot Cloudflare (logique pure, testée).
+ *
+ * Cas reconnus (v1.1.0 : les trois derniers passaient inaperçus) :
+ * - code 403 / 429 / 503 + page Cloudflare avec un marqueur de défi ;
+ * - en-tête `cf-mitigated: challenge`, **quel que soit le code** ;
+ * - page de défi servie en **200** (marqueurs propres aux pages de défi seulement : le script
+ *   `challenge-platform/…/jsd` est aussi injecté dans des pages normales) ;
+ * - **HTML servi par Cloudflare là où l'app attend du JSON** ([expectsJson]) : les API du site
+ *   répondent toujours en `application/json` (vérifié le 2026-11-28) ; une page à la place est
+ *   une page intermédiaire (défi, blocage). Avant, l'erreur devenait « réponse inattendue ».
+ */
 object CloudflareDetector {
     private val CHALLENGE_CODES = setOf(403, 429, 503)
     private val BODY_MARKERS = listOf(
         "challenge-platform", "cf_chl_opt", "cf-chl", "Just a moment", "Attention Required",
     )
 
-    fun isChallenge(code: Int, cfMitigated: String?, server: String?, bodyStart: String): Boolean {
-        if (code !in CHALLENGE_CODES) return false
+    /** Marqueurs présents uniquement sur les pages de défi (jamais sur une page normale du site). */
+    private val STRONG_MARKERS = listOf("_cf_chl_opt", "<title>Just a moment", "cf-chl-widget", "orchestrate/chl_page")
+
+    fun isChallenge(
+        code: Int,
+        cfMitigated: String?,
+        server: String?,
+        bodyStart: String,
+        contentType: String? = null,
+        expectsJson: Boolean = false,
+    ): Boolean {
         if (cfMitigated.equals("challenge", ignoreCase = true)) return true
         val cloudflare = server?.contains("cloudflare", ignoreCase = true) == true
-        return cloudflare && BODY_MARKERS.any { bodyStart.contains(it, ignoreCase = true) }
+        if (!cloudflare) return false
+        val html = contentType?.contains("html", ignoreCase = true) == true ||
+            bodyStart.trimStart().startsWith("<")
+        // HTML au lieu de JSON : réponse « réussie » ou code de blocage (un 404 HTML = route inconnue).
+        if (expectsJson && html && (code in 200..299 || code in CHALLENGE_CODES)) return true
+        if (code in CHALLENGE_CODES) return BODY_MARKERS.any { bodyStart.contains(it, ignoreCase = true) }
+        return html && looksLikeChallengePage(bodyStart)
     }
+
+    /** La page (HTML) est une page de défi Cloudflare. Sert aussi à la WebView de repli. */
+    fun looksLikeChallengePage(html: String): Boolean =
+        STRONG_MARKERS.any { html.contains(it, ignoreCase = true) }
 }

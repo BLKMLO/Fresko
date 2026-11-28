@@ -3,6 +3,7 @@ package com.fresko.app.net
 import androidx.test.core.app.ApplicationProvider
 import com.fresko.core.network.CloudflareChallengeException
 import com.fresko.core.network.HttpFetcher
+import com.fresko.core.network.HttpResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,7 +53,7 @@ class ChallengeAwareFetcherTest {
         val solver = FakeSolver(site, succeeds = true)
         val body = ChallengeAwareFetcher(site, solver, registry).get(url)
         assertEquals("ok", body)
-        assertEquals(listOf("https://www.saiyanmanga.com/"), solver.solved) // page d'accueil ouverte
+        assertEquals(listOf(url), solver.solved) // la page bloquée elle-même (pas l'accueil)
         assertTrue(registry.pending.value.isEmpty())
     }
 
@@ -64,7 +65,7 @@ class ChallengeAwareFetcherTest {
             fetcher.get(url); fail("exception attendue")
         } catch (_: CloudflareChallengeException) {
         }
-        assertEquals(mapOf("www.saiyanmanga.com" to "https://www.saiyanmanga.com/"), registry.pending.value)
+        assertEquals(mapOf("www.saiyanmanga.com" to url), registry.pending.value)
     }
 
     @Test
@@ -96,7 +97,7 @@ class ChallengeAwareFetcherTest {
     fun `etat persiste entre deux demarrages`() {
         registry.markPending(url)
         val again = ChallengeRegistry(ApplicationProvider.getApplicationContext())
-        assertEquals("https://www.saiyanmanga.com/", again.pending.value["www.saiyanmanga.com"])
+        assertEquals(url, again.pending.value["www.saiyanmanga.com"])
     }
 
     @Test
@@ -104,6 +105,61 @@ class ChallengeAwareFetcherTest {
         registry.markPending("https://www.natomanga.com/search/story/solo")
         registry.markPending(url)
         val again = ChallengeRegistry(ApplicationProvider.getApplicationContext())
-        assertEquals(mapOf("www.saiyanmanga.com" to "https://www.saiyanmanga.com/"), again.pending.value)
+        assertEquals(mapOf("www.saiyanmanga.com" to url), again.pending.value)
+    }
+
+    // --- Repli WebView (v1.1.0) ---
+
+    private class FakePages(val result: HttpResult?) : PageFetcher {
+        val loaded = mutableListOf<String>()
+        override suspend fun fetch(url: String): HttpResult? { loaded += url; return result }
+    }
+
+    @Test
+    fun `cookie obtenu mais client toujours bloque - la WebView recupere la page`() = runBlocking {
+        val site = FakeSite(blocked = true)
+        val solver = object : ChallengeSolver { override suspend fun solveHeadless(url: String) = true } // site reste bloqué
+        val pages = FakePages(HttpResult("[]", url))
+        val result = ChallengeAwareFetcher(site, solver, registry, pages).fetch(url)
+        assertEquals("[]", result.body)
+        assertEquals(listOf(url), pages.loaded)
+        assertTrue(registry.pending.value.isEmpty())
+    }
+
+    @Test
+    fun `defi interactif - WebView en echec, pas de nouvel essai avant 10 min`() = runBlocking {
+        val site = FakeSite(blocked = true)
+        val pages = FakePages(null)
+        registry.tryStartHeadless(url) // résolution invisible déjà tentée il y a moins de 30 min
+        val fetcher = ChallengeAwareFetcher(site, FakeSolver(site, succeeds = false), registry, pages)
+        repeat(3) { runCatching { fetcher.fetch(url) } }
+        assertEquals(1, pages.loaded.size) // les requêtes suivantes échouent tout de suite
+        assertEquals(mapOf("www.saiyanmanga.com" to url), registry.pending.value)
+        assertTrue(registry.webFallbackAllowed(url, System.currentTimeMillis() + 10 * 60_000 + 1))
+    }
+
+    @Test
+    fun `lecture de la page WebView - JSON brut, HTML, defi`() {
+        fun raw(o: org.json.JSONObject) = org.json.JSONObject.quote(o.toString())
+        val json = PageSnapshot.parse(raw(org.json.JSONObject(mapOf(
+            "url" to url, "ct" to "application/json", "rs" to "complete", "title" to "", "body" to "{\"success\":true}",
+        ))))!!
+        assertEquals("{\"success\":true}", json.body)
+        assertTrue(!json.isChallenge && !json.isLoading)
+        val challenge = PageSnapshot.parse(raw(org.json.JSONObject(mapOf(
+            "url" to url, "ct" to "text/html", "rs" to "complete", "title" to "Just a moment...",
+            "body" to "<html><script>window._cf_chl_opt={}</script></html>",
+        ))))!!
+        assertTrue(challenge.isChallenge)
+        assertEquals(null, PageSnapshot.parse(null))
+        assertEquals(null, PageSnapshot.parse("null"))
+    }
+
+    @Test
+    fun `resolution invisible en echec - pas de seconde attente par la WebView`() = runBlocking {
+        val site = FakeSite(blocked = true)
+        val pages = FakePages(HttpResult("x", url))
+        runCatching { ChallengeAwareFetcher(site, FakeSolver(site, succeeds = false), registry, pages).fetch(url) }
+        assertTrue(pages.loaded.isEmpty())
     }
 }
